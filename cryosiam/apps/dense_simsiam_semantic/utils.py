@@ -2,8 +2,8 @@ import torch
 import collections
 
 from cryosiam.networks.nets import (
-    InstanceHeads,
-    DenseSimSiam
+    DenseSimSiam,
+    SemanticHeads
 )
 
 
@@ -53,7 +53,7 @@ def load_backbone_model(checkpoint_path, device="cuda:0"):
 
 
 def load_prediction_model(checkpoint_path, device="cuda:0"):
-    """Load InstanceHeads trained model from given checkpoint
+    """Load SemanticHeads trained model from given checkpoint
     :param checkpoint_path: path to the checkpoint
     :type checkpoint_path: str
     :param device: on which device should the model be loaded, default is cuda:0
@@ -63,11 +63,9 @@ def load_prediction_model(checkpoint_path, device="cuda:0"):
     """
     checkpoint = torch.load(checkpoint_path)
     config = checkpoint['hyper_parameters']['config']
-    model = InstanceHeads(n_input_channels=config['parameters']['network']['dense_dim'],
-                          spatial_dims=config['parameters']['network']['spatial_dims'],
-                          filters=config['parameters']['network']['filters'],
-                          kernel_size=config['parameters']['network']['kernel_size'],
-                          padding=config['parameters']['network']['padding'])
+    model = SemanticHeads(n_input_channels=config['parameters']['network']['dense_dim'],
+                          num_classes=config['parameters']['network']['out_channels'],
+                          spatial_dims=config['parameters']['network']['spatial_dims'])
 
     new_state_dict = collections.OrderedDict()
     for k, v in checkpoint['state_dict'].items():

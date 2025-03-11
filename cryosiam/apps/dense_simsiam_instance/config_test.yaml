@@ -3,9 +3,9 @@ instance_labels_folder: '/scratch/stojanov/mycoplasma_data/vpp/old/instance_labe
 semantic_predictions: '/scratch/stojanov/mycoplasma_data/vpp/old/semantic_predictions/'
 semantic_foreground_labels: [ 2 ]
 mask_folder: ''
-log_dir: '/scratch/stojanov/development/cryoet-torch/experiments/dense_simsiam_instance'
-prediction_folder: '/scratch/stojanov/development/cryoet-torch/experiments/dense_simsiam_instance/predictions'
-trained_model: '/scratch/stojanov/development/cryoet-torch/experiments/dense_simsiam_instance/model/model-best.ckpt'
+log_dir: '/scratch/stojanov/development/cryosiam/experiments/dense_simsiam_instance'
+prediction_folder: '/scratch/stojanov/development/cryosiam/experiments/dense_simsiam_instance/predictions'
+trained_model: '/scratch/stojanov/development/cryosiam/experiments/dense_simsiam_instance/model/model-best.ckpt'
 file_extension: '.mrc'
 
 test_files: [ 'TS_56_6.80Apx.mrc', 'TS_61_6.80Apx.mrc' ]

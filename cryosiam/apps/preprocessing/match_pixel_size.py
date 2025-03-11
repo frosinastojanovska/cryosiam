@@ -3,7 +3,7 @@ import mrcfile
 import argparse
 import numpy as np
 
-from cryoet_torch.utils import match_pixel_size
+from cryosiam.utils import match_pixel_size
 
 def scale_tomogram(tomo, percentile_lower=None, percentile_upper=None):
     if percentile_lower:
