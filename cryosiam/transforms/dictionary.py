@@ -11,7 +11,8 @@ from .array import (
     ClipIntensity,
     InvertIntensity,
     RandomLowPassBlur,
-    RandomGaussianNoise
+    RandomGaussianNoise,
+    RandomHighPassSharpen
 )
 
 
@@ -191,4 +192,49 @@ class RandomGaussianNoised(RandomizableTransform, MapTransform):
         self.noised.randomize(None)
         for key in self.key_iterator(d):
             d[key] = self.noised(d[key], randomize=False)
+        return d
+
+
+class RandomHighPassSharpend(RandomizableTransform, MapTransform):
+    """
+    Dictionary-based wrapper of :py:class:`cryoet_torch.transforms.RandomHighPassSharpen`.
+    """
+
+    backend = RandomHighPassSharpen.backend
+
+    def __init__(self, keys: KeysCollection, sigma: Tuple[float, float], sigma2: Tuple[float, float],
+                 ignore_zeros: bool = False, prob: float = 0.1, allow_missing_keys: bool = False) -> None:
+        """
+        Args:
+            keys: keys of the corresponding items to be transformed.
+                See also: :py:class:`monai.transforms.compose.MapTransform`
+            sigma: range of sigma value for first Gaussian filter.
+            sigma2: range of sigma value for second Gaussian filter.
+            ignore_zeros: avoid applying the transformation of the values of zeros in the image
+            prob: probability to apply the shapening.
+            allow_missing_keys: don't raise exception if key is missing.
+        """
+        MapTransform.__init__(self, keys, allow_missing_keys)
+        RandomizableTransform.__init__(self, prob)
+        self.high_pass = RandomHighPassSharpen(sigma=sigma, sigma2=sigma2, ignore_zeros=ignore_zeros, prob=prob)
+
+    def set_random_state(
+            self, seed: Optional[int] = None, state: Optional[np.random.RandomState] = None
+    ) -> "RandomHighPassSharpend":
+        super().set_random_state(seed, state)
+        self.high_pass.set_random_state(seed, state)
+        return self
+
+    def __call__(self, data) -> Dict[Hashable, NdarrayOrTensor]:
+        d = dict(data)
+        self.randomize(None)
+        if not self._do_transform:
+            for key in self.key_iterator(d):
+                d[key] = convert_to_tensor(d[key], track_meta=get_track_meta())
+            return d
+
+        # all the keys share the same random sigma1, sigma2, etc.
+        self.high_pass.randomize(None)
+        for key in self.key_iterator(d):
+            d[key] = self.high_pass(d[key], randomize=False)
         return d

@@ -10,7 +10,7 @@ from monai.transforms import (
     LoadImaged,
     NormalizeIntensityd,
     ScaleIntensityRanged,
-    SpatialPadd,
+    SpatialPad,
     EnsureChannelFirstd,
     EnsureTyped,
     EnsureType

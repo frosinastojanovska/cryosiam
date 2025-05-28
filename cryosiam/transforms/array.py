@@ -197,3 +197,67 @@ class RandomGaussianNoise(RandomizableTransform):
         out_t = noised.unsqueeze(0)
         out, *_ = convert_to_dst_type(out_t, dst=img, dtype=out_t.dtype)
         return out
+
+
+class RandomHighPassSharpen(RandomizableTransform):
+    """
+    Implement high pass filtering on an image.
+    """
+    backend = [TransformBackends.TORCH, TransformBackends.NUMPY]
+
+    def __init__(self, sigma: Tuple[float, float], sigma2: Tuple[float, float], ignore_zeros: bool = False,
+                 prob: float = 0.1) -> None:
+        """
+        Args:
+            sigma: range of sigma value for first Gaussian filter.
+            sigma2: range of sigma value for second Gaussian filter.
+            ignore_zeros: avoid applying the transformation of the values of zeros in the image
+            prob: probability to apply the sharpening.
+        """
+        RandomizableTransform.__init__(self, prob)
+        self.sigma_range = sigma
+        self.sigma2_range = sigma2
+        if len(self.sigma_range) != 2:
+            raise AssertionError(f"Sigma range should be a sequence of two elements (start, end), "
+                                 f"but got values {self.sigma_range}.")
+        if len(self.sigma2_range) != 2:
+            raise AssertionError(f"Sigma2 range should be a sequence of two elements (start, end), "
+                                 f"but got values {self.sigma2_range}.")
+        if self.sigma_range[0] > self.sigma_range[1]:
+            raise AssertionError(f"First element of sigma range should be smaller than the second element of the "
+                                 f"range, but got values {self.sigma_range}.")
+        if self.sigma2_range[0] > self.sigma2_range[1]:
+            raise AssertionError(f"First element of sigma2 range should be smaller than the second element of the "
+                                 f"range, but got values {self.sigma2_range}.")
+        self.prob = prob
+        self.sigma1 = self.sigma_range[0]
+        self.sigma2 = self.sigma2_range[0]
+        self.ignore_zeros = ignore_zeros
+
+    def randomize(self, data: Optional[Any] = None) -> None:
+        super().randomize(None)
+        if not self._do_transform:
+            return None
+        self.sigma1 = self.R.uniform(low=self.sigma_range[0], high=self.sigma_range[1])
+        self.sigma2 = self.R.uniform(low=self.sigma2_range[0], high=self.sigma2_range[1])
+
+    def __call__(self, img: NdarrayOrTensor, randomize: bool = True) -> NdarrayOrTensor:
+        """
+        Apply the transform to `img`.
+        """
+        img = convert_to_tensor(img, track_meta=get_track_meta())
+        if randomize:
+            self.randomize()
+        if not self._do_transform:
+            return img
+        img_t, *_ = convert_data_type(img, torch.Tensor, dtype=torch.float)
+        img_t = torch.squeeze(img_t, 0)
+        mask = img_t == 0
+        low_pass = torch.from_numpy(ndimage.gaussian_filter(img_t.numpy(), self.sigma1)).float()
+        low_pass2 = torch.from_numpy(ndimage.gaussian_filter(img_t.numpy(), self.sigma2)).float()
+        high_pass = low_pass - low_pass2
+        if self.ignore_zeros:
+            high_pass[mask] = 0
+        out_t = high_pass.unsqueeze(0)
+        out, *_ = convert_to_dst_type(out_t, dst=img, dtype=out_t.dtype)
+        return out

@@ -130,8 +130,8 @@ CryoSiam provides pretrained models for semantic segmentation. You can download 
 
 ## Related Commands
 
-- [CryoSiam Denoising](../denoising.md)
-- [CryoSiam Instance Prediction](../instance/prediction)
+- [CryoSiam Denoising](../denoising/prediction.md)
+- [CryoSiam Instance Prediction](../instance/prediction.md)
 - [Installation Guide](../installation.md)
 
 ---
