@@ -46,12 +46,7 @@ coverage.xml
 *.log
 *.pot
 
-# Sphinx documentation
-docs/_build/
 
 .idea/
 
 experiments/*
-
-# MkDocs generated site
-site/
