@@ -1,6 +1,7 @@
 from .dictionary import (
     RandomSharpend,
     ClipIntensityd,
+    ScaleIntensityd,
     InvertIntensityd,
     RandomLowPassBlurd,
     RandomGaussianNoised,
@@ -9,6 +10,7 @@ from .dictionary import (
 from .array import (
     RandomSharpen,
     ClipIntensity,
+    ScaleIntensity,
     InvertIntensity,
     RandomLowPassBlur,
     RandomGaussianNoise,

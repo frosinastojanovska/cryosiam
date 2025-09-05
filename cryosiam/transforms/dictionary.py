@@ -9,6 +9,7 @@ from monai.transforms.compose import MapTransform, RandomizableTransform
 from .array import (
     RandomSharpen,
     ClipIntensity,
+    ScaleIntensity,
     InvertIntensity,
     RandomLowPassBlur,
     RandomGaussianNoise,
@@ -37,6 +38,32 @@ class ClipIntensityd(MapTransform):
         d = dict(data)
         for key in self.key_iterator(d):
             d[key] = self.clip(d[key])
+        return d
+
+
+class ScaleIntensityd(MapTransform):
+    """
+    Dictionary-based wrapper of :py:class:`cryoet_torch.transforms.ScaleIntensity`.
+    """
+
+    backend = ClipIntensity.backend
+
+    def __init__(self, keys: KeysCollection, lower_percentage=0.1,
+                 upper_percentage=99.9, allow_missing_keys: bool = False) -> None:
+        """
+        Args:
+            keys: keys of the corresponding items to be transformed.
+                See also: :py:class:`monai.transforms.compose.MapTransform`
+            allow_missing_keys: don't raise exception if key is missing.
+        """
+        super().__init__(keys, allow_missing_keys)
+        self.scale = ScaleIntensity(lower_percentage=lower_percentage,
+                                   upper_percentage=upper_percentage)
+
+    def __call__(self, data) -> Dict[Hashable, NdarrayOrTensor]:
+        d = dict(data)
+        for key in self.key_iterator(d):
+            d[key] = self.scale(d[key])
         return d
 
 

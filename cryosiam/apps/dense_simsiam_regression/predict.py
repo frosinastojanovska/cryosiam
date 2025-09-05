@@ -18,10 +18,11 @@ from monai.transforms import (
 
 from cryosiam.utils import parser_helper
 from cryosiam.data import MrcReader, PatchIter, MrcWriter
+from cryosiam.transforms import ScaleIntensityd, InvertIntensityd
 from cryosiam.apps.dense_simsiam_regression import load_backbone_model, load_prediction_model
 
 
-def main(config_file_path,filename):
+def main(config_file_path, filename):
     with open(config_file_path, "r") as ymlfile:
         cfg = yaml.safe_load(ymlfile)
 
@@ -64,6 +65,8 @@ def main(config_file_path,filename):
         [
             LoadImaged(keys='image', reader=reader),
             EnsureChannelFirstd(keys='image'),
+            InvertIntensityd(keys='image'),
+            ScaleIntensityd(keys='image'),
             ScaleIntensityRanged(keys='image', a_min=cfg['parameters']['data']['min'],
                                  a_max=cfg['parameters']['data']['max'], b_min=0, b_max=1, clip=True),
             NormalizeIntensityd(keys='image', subtrahend=cfg['parameters']['data']['mean'],
@@ -119,7 +122,7 @@ def main(config_file_path,filename):
                     preds_out[(slice(0, num_output_channels),) + slices] = o_batch[(slice(0, num_output_channels),)
                                                                                    + slices2]
 
-            preds_out = preds_out[(slice(0, num_output_channels), ) + tuple([slice(0, n) for n in original_size])]
+            preds_out = preds_out[(slice(0, num_output_channels),) + tuple([slice(0, n) for n in original_size])]
 
             if cfg['scale_prediction']:
                 preds_out = (preds_out - preds_out.min()) / (preds_out.max() - preds_out.min())
@@ -133,6 +136,6 @@ def main(config_file_path,filename):
 
 
 if __name__ == "__main__":
-    parser = parser_helper()
+    parser = parser_helper("Run CryoSiam denoising prediction")
     args = parser.parse_args()
     main(args.config_file, args.filename)

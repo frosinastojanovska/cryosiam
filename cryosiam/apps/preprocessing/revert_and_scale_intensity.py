@@ -23,6 +23,36 @@ def scale_tomogram(tomo, percentile_lower=None, percentile_upper=None):
 
     return np.clip(tomo, 0, 1)
 
+def main(input_path, output_path, invert, lower_end_percentage, upper_end_percentage):
+    if os.path.isdir(input_path):
+        os.makedirs(output_path, exist_ok=True)
+        for tomo in os.listdir(input_path):
+            if tomo.endswith(".mrc") or tomo.endswith(".rec"):
+                with mrcfile.open(os.path.join(input_path, tomo), permissive=True) as m:
+                    tomogram = m.data
+                    voxel_size = m.voxel_size
+                if invert:
+                    tomogram = invert_tomogram(tomogram)
+
+                tomogram = scale_tomogram(tomogram, lower_end_percentage, upper_end_percentage)
+
+                with mrcfile.new(os.path.join(output_path, tomo), overwrite=True) as m:
+                    m.set_data(tomogram)
+                    m.voxel_size = voxel_size
+    else:
+        with mrcfile.open(input_path, permissive=True) as m:
+            tomogram = m.data
+            voxel_size = m.voxel_size
+
+        if invert:
+            tomogram = invert_tomogram(tomogram)
+
+        tomogram = scale_tomogram(tomogram, lower_end_percentage, upper_end_percentage)
+
+        with mrcfile.new(output_path, overwrite=True) as m:
+            m.set_data(tomogram)
+            m.voxel_size = voxel_size
+
 
 def parser_helper(description=None):
     description = "Invert contrast of a tomogram and perform scaling of the values" if description is None else description
@@ -33,9 +63,9 @@ def parser_helper(description=None):
     parser.add_argument('--output_path', type=str, required=True, help='path to save the output tomogram or '
                                                                        'path to folder to save the output tomogram/s')
     parser.add_argument("--invert", action="store_true", default=False, help="Inverts contrast of images.")
-    parser.add_argument("--lower_end_percentage", type=float, required=False,
+    parser.add_argument("--lower_end_percentage", type=float, required=True, default=0.1,
                         help="Cut off values from the lower percentile end of the intensities.")
-    parser.add_argument("--upper_end_percentage", type=float, required=False,
+    parser.add_argument("--upper_end_percentage", type=float, required=True, default=99.9,
                         help="Cut off values from the upper percentile end of the intensities.")
     return parser
 
@@ -43,32 +73,4 @@ def parser_helper(description=None):
 if __name__ == '__main__':
     parser = parser_helper()
     args = parser.parse_args()
-
-    if os.path.isdir(args.input_path):
-        os.makedirs(args.output_path, exist_ok=True)
-        for tomo in os.listdir(args.input_path):
-            if tomo.endswith(".mrc") or tomo.endswith(".rec"):
-                with mrcfile.open(os.path.join(args.input_path, tomo), permissive=True) as m:
-                    tomogram = m.data
-                    voxel_size = m.voxel_size
-                if args.invert:
-                    tomogram = invert_tomogram(tomogram)
-
-                tomogram = scale_tomogram(tomogram, args.lower_end_percentage, args.upper_end_percentage)
-
-                with mrcfile.new(os.path.join(args.output_path, tomo), overwrite=True) as m:
-                    m.set_data(tomogram)
-                    m.voxel_size = voxel_size
-    else:
-        with mrcfile.open(args.input_path, permissive=True) as m:
-            tomogram = m.data
-            voxel_size = m.voxel_size
-
-        if args.invert:
-            tomogram = invert_tomogram(tomogram)
-
-        tomogram = scale_tomogram(tomogram, args.lower_end_percentage, args.upper_end_percentage)
-
-        with mrcfile.new(args.output_path, overwrite=True) as m:
-            m.set_data(tomogram)
-            m.voxel_size = voxel_size
+    main(args.input_path, args.output_path, args.invert, args.lower_end_percentage, args.upper_end_percentage)

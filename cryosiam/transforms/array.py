@@ -30,6 +30,34 @@ class ClipIntensity(Transform):
         return out
 
 
+class ScaleIntensity(Transform):
+    """
+        Scale intensity for the entire image by removing lower and upper percentage
+    """
+
+    backend = [TransformBackends.TORCH, TransformBackends.NUMPY]
+
+    def __init__(self, lower_percentage=0.1, upper_percentage=99.9) -> None:
+        self.lower_percentage = lower_percentage
+        self.upper_percentage = upper_percentage
+
+    def __call__(self, img: NdarrayOrTensor) -> NdarrayOrTensor:
+        """
+        Apply the transform to `img`.
+        """
+
+        img = convert_to_tensor(img, track_meta=get_track_meta())
+
+        img_t, *_ = convert_data_type(img, np.ndarray, dtype=np.float32)
+        min_val = np.percentile(img_t, self.lower_percentage)
+        max_val = np.percentile(img_t, self.upper_percentage)
+        img_t = (img_t - min_val) / (max_val - min_val)
+        out = np.clip(img_t, 0, 1)
+
+        out, *_ = convert_data_type(data=out, dtype=img.dtype)
+        return out
+
+
 class InvertIntensity(Transform):
     """
     Invert intensity for the entire image by multiplying with -1.
