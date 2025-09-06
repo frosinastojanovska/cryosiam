@@ -53,8 +53,11 @@ def main(config_file_path):
             coords_array = np.asarray(coords)
             patch = image[slices].astype(np.float32)
             gt_patch = gt[slices].astype(np.float32)
-            # if np.sum(gt_patch) == 0:
-            #     continue
+
+            if 'remove_empty_patches' in cfg['parameters']['data'] and cfg['parameters']['data'][
+                'remove_empty_patches']:
+                if np.sum(gt_patch) == 0:
+                    continue
             if len(patch_size) == 2:
                 y, x = coords_array[0][0], coords_array[1][0]
                 patch_path = f'{file.split(cfg["file_extension"])[0]}_y{y}_x{x}{cfg["file_extension"]}'
