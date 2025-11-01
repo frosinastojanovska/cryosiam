@@ -2,14 +2,12 @@ import os
 import umap
 import yaml
 import h5py
-import torch
 import numpy as np
 import pandas as pd
 import plotly.express as px
 from sklearn.decomposition import PCA
 from scipy.sparse.linalg import eigsh
 from sklearn.cluster import SpectralClustering
-from torch_clustering import PyTorchGaussianMixture
 from sklearn.manifold._spectral_embedding import _set_diag
 from scipy.sparse.csgraph import laplacian as graph_laplacian
 
@@ -49,38 +47,6 @@ def pca_reduce_dimensions(patches_embeddings, n=3):
     print(pca.explained_variance_ratio_)
     print(pca.singular_values_)
     return pca_result
-
-
-def gmm(embeddings, num_clusters=10, metric='cosine', covariance_type='diag'):
-    """Separate the samples (features) with GMM
-    :param embeddings: the embeddings
-    :type embeddings: np.array
-    :type
-    :param distance_threshold: threshold for the distance to merge clusters
-    :type distance_threshold: int
-    :return: cluster labels of the samples
-    """
-    print('GMM')
-    pytorch_gaussian_mixture = PyTorchGaussianMixture(metric=metric,
-                                                      covariance_type=covariance_type,
-                                                      reg_covar=1e-6,
-                                                      init='k-means++',
-                                                      random_state=0,
-                                                      n_clusters=num_clusters,
-                                                      n_init=10,
-                                                      max_iter=300,
-                                                      tol=1e-5,
-                                                      verbose=True)
-    if torch.cuda.is_available():
-        embeddings = torch.from_numpy(embeddings).cuda()
-    else:
-        embeddings = torch.from_numpy(embeddings)
-    labels = pytorch_gaussian_mixture.fit_predict(embeddings)
-    if torch.cuda.is_available():
-        labels = labels.cpu().numpy()
-    else:
-        labels = labels.numpy()
-    return labels
 
 
 def predict_k(affinity_matrix, max_k=100):
@@ -199,7 +165,8 @@ def visualize_features_space(image_features, filename, classes, labels, discrete
         data['class'] = data['class'].apply(str)
 
     if pca_components is None:
-        u = umap.UMAP(n_components=2, metric=distance, n_neighbors=n_neighbors, min_dist=min_dist, random_state=10)
+        u = umap.UMAP(n_components=2, metric=distance, n_neighbors=n_neighbors, min_dist=min_dist,
+                      random_state=10, n_jobs=1)
         projections = u.fit_transform(image_features)
         x, y = projections[:, 0], projections[:, 1]
     else:
@@ -207,7 +174,11 @@ def visualize_features_space(image_features, filename, classes, labels, discrete
     data['x'] = list(x)
     data['y'] = list(y)
     data['labels'] = labels
-    fig = px.scatter(data, x='x', y='y', color='class', hover_data=data.columns, opacity=0.5)
+    fig = px.scatter(data, x='x', y='y', color='class', hover_data=data.columns, opacity=0.5,
+                     color_discrete_sequence=px.colors.qualitative.Light24)
+    fig.update_layout(plot_bgcolor='white')
+    fig.update_xaxes(showline=True, linecolor='black', linewidth=1)
+    fig.update_yaxes(showline=True, linecolor='black', linewidth=1)
     fig.write_html(filename)
     data.to_csv(filename.split('.html')[0] + '_umap_data.csv', index=False)
 
@@ -224,57 +195,56 @@ def main(config_file_path):
 
     files = sorted(files)
 
-    with h5py.File(os.path.join(prediction_folder, 'embeddings.h5'), 'r') as f:
-        embeddings = f['embeddings'][()]
-        num_samples = f['number_of_samples'][()]
+    if not os.path.isfile(os.path.join(prediction_folder, 'embeddings.h5')):
+        embeddings = []
+        num_samples = []
+        for ind, file in enumerate(files):
+            file = file.split(cfg['file_extension'])[0]
+            with h5py.File(os.path.join(prediction_folder, f'{file}_embeds.h5'), 'r') as f:
+                patch_embeddings = f['embeddings'][()].T
+            embeddings.append(patch_embeddings)
+            num_samples.append(patch_embeddings.shape[0])
+        num_samples = np.array(num_samples)
+        embeddings = np.concatenate(embeddings, axis=0)
+        with h5py.File(os.path.join(prediction_folder, 'embeddings.h5'), 'w') as f:
+            f.create_dataset('embeddings', data=embeddings)
+            f.create_dataset('number_of_samples', data=num_samples)
+    else:
+        with h5py.File(os.path.join(prediction_folder, 'embeddings.h5'), 'r') as f:
+            embeddings = f['embeddings'][()]
+            num_samples = f['number_of_samples'][()]
 
-    with h5py.File(os.path.join(prediction_folder, 'kmeans_clusters.h5'), 'r') as f:
-        clusters = f['clusters'][()]
-
-    mask = np.isin(clusters, cfg['clustering_second_stage']['selected_previous_clusters'])
-    embeddings = embeddings[mask]
-    # gmm_clusters = gmm(embeddings, cfg['clustering_second_stage']['num_clusters'],
-    #                    metric=cfg['clustering_second_stage']['metric'],
-    #                    covariance_type=cfg['clustering_second_stage']['covariance_type'])
-    # gmm_clusters = np.argmax(gmm_clusters, axis=1) + 1
-
-    spectral_clusters = spectral_clustering(embeddings, num_clusters=cfg['clustering_second_stage']['num_clusters'],
-                                            estimate_num_clusters=cfg['clustering_second_stage']['estimate_num_clusters'])
+    spectral_clusters = spectral_clustering(embeddings, num_clusters=cfg['clustering_spectral']['num_clusters'],
+                                            estimate_num_clusters=cfg['clustering_spectral'][
+                                                'estimate_num_clusters'])
     spectral_clusters += 1
 
-    selected_clusters = ",".join([str(x) for x in cfg["clustering_second_stage"]["selected_previous_clusters"]])
-
-    with h5py.File(os.path.join(prediction_folder, f'spectral_clusters_selected_{selected_clusters}.h5'), 'w') as f:
+    clusters = spectral_clusters.flatten()
+    print(f'Number or spectral clusters: {np.unique(spectral_clusters).shape[0]}')
+    with h5py.File(os.path.join(prediction_folder, 'spectral_clusters.h5'), 'w') as f:
         f.create_dataset('clusters', data=spectral_clusters)
 
     i = 0
-    j = 0
     labels = []
     for ind, file in enumerate(files):
         filename = file.split(cfg['file_extension'])[0]
-        print(filename)
         n = num_samples[ind]
         predicted_labels = []
         for _ in range(n):
-            if clusters[i] not in cfg['clustering_second_stage']['selected_previous_clusters']:
-                predicted_labels.append(-1)
-            else:
-                predicted_labels.append(spectral_clusters[j])
-                j += 1
+            predicted_labels.append(clusters[i])
             i += 1
 
         with h5py.File(os.path.join(prediction_folder, f'{filename}_clusters_spectral.h5'), 'w') as f:
             f.create_dataset('predictions', data=np.array(predicted_labels))
 
-        df = pd.read_csv(os.path.join(prediction_folder, f'{filename}_instance_regions_clustered.csv'))
-        df['semantic_class_2'] = predicted_labels
-        labels += [f'{filename}{cfg["file_extension"]}_{x}' for x in df[np.array(predicted_labels) != -1]['label']]
-        df.to_csv(os.path.join(prediction_folder,
-                               f'{filename}_instance_regions_spectral_clusters_selected_{selected_clusters}.csv'),
-                  index=False)
+        df = pd.read_csv(os.path.join(prediction_folder, f'{filename}_instance_regions.csv'))
+        df['semantic_class'] = predicted_labels
+        df.to_csv(os.path.join(prediction_folder, f'{filename}_instance_regions_spectral_clustered.csv'), index=False)
+        labels += [f'{filename}{cfg["file_extension"]}_{x}' for x in df['label']]
 
-    file = os.path.join(prediction_folder, f'spectral_clusters_selected_{selected_clusters}.html')
-    visualize_features_space(embeddings.T, file, spectral_clusters, labels)
+    if cfg['clustering_spectral']['visualization']:
+        file = os.path.join(prediction_folder, f'spectral_clusters.html')
+        visualize_features_space(embeddings[:20000].T, file, clusters[:20000], labels[:20000])
 
 
 if __name__ == '__main__':

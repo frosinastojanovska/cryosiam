@@ -58,12 +58,13 @@ def load_prediction_model(checkpoint_path, contrastive=False, device="cuda:0"):
     return model
 
 
-def extract_patches_from_instances_mask(image, instances_mask, min_particle_size=None, max_particle_size=None,
-                                        masking=0):
+def extract_patches_from_instances_mask(image, instances_mask, regions=None, min_particle_size=None,
+                                        max_particle_size=None, masking=0, expand_labels_size=1):
     patches = []
     labels = []
-    instances_mask = expand_labels(instances_mask, distance=1)
-    regions = regionprops_table(instances_mask, properties=['label', 'area', 'bbox', 'centroid'])
+    instances_mask = expand_labels(instances_mask, distance=expand_labels_size)
+    if regions is None:
+        regions = regionprops_table(instances_mask, properties=['label', 'area', 'bbox', 'centroid'])
     regions['hull_area'] = [0] * regions['label'].shape[0]
     filtered_regions = {key: [] for key in regions.keys()}
     for i in range(regions['label'].shape[0]):
@@ -156,14 +157,32 @@ def main(config_file_path, filename=None):
                 suffix = ''
             instances_file_name = os.path.basename(test_sample['file_name'][0]).split(cfg['file_extension'])[
                                       0] + f'_instance_preds{suffix}.h5'
+            if not os.path.exists(os.path.join(instances_mask_folder, instances_file_name)):
+                continue
             with h5py.File(os.path.join(instances_mask_folder, instances_file_name)) as f:
                 mask = f['instances'][()]
+            regions_file_name = os.path.join(instances_mask_folder,
+                                             os.path.basename(test_sample['file_name'][0]).split(cfg['file_extension'])[
+                                                 0] + f'_instance_regions{suffix}.csv')
+            if os.path.exists(regions_file_name):
+                regions = collections.defaultdict(list)
+                with open(regions_file_name, newline='') as csv_file:
+                    reader = csv.DictReader(csv_file)
+                    for row in reader:
+                        for k, v in row.items():
+                            regions[k].append(int(v) if 'label' in k or 'bbox' in k else float(v))
+                    for key in regions.keys():
+                        regions[key] = np.asarray(regions[key])
+            else:
+                regions = None
             patches, labels, regions = extract_patches_from_instances_mask(
                 test_sample['image'][0].cpu().detach().numpy(),
                 mask,
+                regions,
                 cfg['min_particle_size'],
                 cfg['max_particle_size'],
-                cfg['masking_type'])
+                cfg['masking_type'],
+                cfg['expand_labels'])
             print('Extracted patches')
             image_dataset = ArrayDataset(patches, labels=labels, img_transform=patch_transforms)
             embeds = np.zeros([cfg['parameters']['network']['dim']] + [len(patches)])

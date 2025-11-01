@@ -4,7 +4,7 @@ import h5py
 import torch
 import numpy as np
 from torch.utils.data import DataLoader
-from monai.data import Dataset, list_data_collate, GridPatchDataset, ITKReader, ITKWriter
+from monai.data import Dataset, list_data_collate, GridPatchDataset
 from monai.transforms import (
     Compose,
     LoadImaged,
@@ -55,12 +55,6 @@ def main(config_file_path, filename):
                           'file_name': os.path.join(test_folder, file)})
     reader = MrcReader(read_in_mem=True)
 
-    if cfg['file_extension'] in ['.mrc', '.rec']:
-        writer = MrcWriter(output_dtype=np.float32, overwrite=True)
-        writer.set_metadata({'voxel_size': 1})
-    else:
-        writer = ITKWriter()
-
     transforms = Compose(
         [
             LoadImaged(keys='image', reader=reader),
@@ -88,6 +82,7 @@ def main(config_file_path, filename):
     with torch.no_grad():
         for i, test_sample in enumerate(test_loader):
             out_file = os.path.join(prediction_folder, os.path.basename(test_sample['file_name'][0]))
+            voxel_size = reader.read(test_sample['file_name'][0]).voxel_size
             original_size = test_sample['image'][0][0].shape
             img = pad_transform(test_sample['image'][0])
             patch_dataset = GridPatchDataset(data=[img], patch_iter=patch_iter)
@@ -131,6 +126,8 @@ def main(config_file_path, filename):
                 with h5py.File(out_file.split(cfg['file_extension'])[0] + '_preds.h5', 'w') as f:
                     f.create_dataset('preds', data=preds_out)
 
+            writer = MrcWriter(output_dtype=np.float32, overwrite=True)
+            writer.set_metadata({'voxel_size': voxel_size})
             writer.set_data_array(preds_out[0], channel_dim=None)
             writer.write(out_file.split(cfg['file_extension'])[0] + f'{cfg["file_extension"]}')
 

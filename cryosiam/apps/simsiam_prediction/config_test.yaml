@@ -1,38 +1,28 @@
 data_folder: '/scratch/stojanov/mycoplasma_data/vpp/240422/'
 instances_mask_folder: '/scratch/stojanov/mycoplasma_data/vpp/240422/instances'
-filtering_mask_folder: ''
-gt_instances_mask_folder: null
-gt_instances_stats_folder: null
 log_dir: '/scratch/stojanov/development/cryoet-torch/experiments/simsiam'
 prediction_folder: '/scratch/stojanov/development/cryoet-torch/experiments/simsiam/predictions'
 trained_model: '/g/zaugg/stojanov/simulated_datasets/experiments/simsiam/version_0/model/last.ckpt'
+contrastive: True
 file_extension: '.mrc'
 
 test_files: null
-clustering_files: [ 'TS_01', 'TS_02' ]
+clustering_files: null
+visualization_files: null
 
-# SimSiam embeddings parameters
-min_particle_size: 100
+min_particle_size: 10
 max_particle_size: null
-masking_type: 0  # one of 0 - no masking, 1 - masking with convex hull mask, 2 - masking with tight mask
+masking_type: 1
+expand_labels: 2
 
-instances:
-  min_center_distance: 1
-  max_center_distance: 4
-
-# Clustering parameters
-clustering:
-  num_clusters: 100
-  pca_components: 120
+clustering_kmeans:
+  num_clusters: 10
   visualization: True
-  reference_similarity_threshold: 0.999
 
-clustering_second_stage:
-  num_clusters: 5
-  selected_previous_clusters: [ 10 ]
-  metric: 'cosine'
-  covariance_type: 'diag'
-  estimate_num_clusters: True
+clustering_spectral:
+  num_clusters: 10
+  estimate_num_clusters: False
+  visualization: True
 
 # Visualization parameters
 visualization:
@@ -44,54 +34,11 @@ visualization:
   visualize_3d_mask: True
   3d_mask_extension: '.mrc' # either .mrc or .h5
 
-supervised:
-  trained_model: '/g/zaugg/stojanov/simulated_datasets/experiments/simsiam_prediction/version_0/model/model_best.ckpt'
-  class_mappings_path: '/g/zaugg/stojanov/simulated_datasets/experiments/simsiam_prediction/version_0/model/class_mappings.csv'
-  threshold: 0.5
-
-reference:
-  prediction_folder: ''
-  references_file: ''
-  distance_type: 'euclidean'
-  semi_kernel: ''
-  semi_gamma: 20
-  semi_neighbours: 7
-  semi_alpha: 0.2
-  semi_max_iter: 30
-
-# PU learning classification parameters
-pu_learning_classification:
-  model_path: null
-  selected_classes:
-    instance_regions_gmm_clusters_selected_1: [ 1, 2, 3, 4, 5 ]
-    instance_regions_gmm_clusters_selected_8: [ 2, 3]
-  n_trees: 100
-  class_name: 'ribo'
-  prob_threshold: 0.5
-
-combine_segmentations:
-  folders: []
-  min_distances: []
-  max_distances: []
-  suffix: 'instance_regions_supervised.csv'
-  out_folder: ''
-
-combine_files:
-  selected_classes:
-    instance_regions_gmm_clusters_selected_1: [ 1, 2, 3, 4, 5 ]
-    instance_regions_gmm_clusters_selected_8: [ 2, 3 ]
-  class_name: 'ribo'
-
-filtering:
-  suffix: 'instance_supervised_regions.csv'
-  column: 'semantic_class'
-  selected_values: [ 148, 149 ]
-  mapped_values: [ 1, 2 ]
-
 parameters:
-  gpu_devices: 1
+  gpu_devices: 0
   data:
-    patch_size: [ 128, 128, 128 ]
+    patch_size: [ 64, 64, 64 ]
+    patch_overlap: null
     min: 0
     max: 1
     mean: 0
@@ -102,4 +49,4 @@ parameters:
     dim: 1024
 
 hyper_parameters:
-  batch_size: 128
+  batch_size: 10

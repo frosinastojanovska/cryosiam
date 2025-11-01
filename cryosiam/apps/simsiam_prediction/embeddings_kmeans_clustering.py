@@ -2,12 +2,11 @@ import os
 import umap
 import yaml
 import h5py
-import torch
 import numpy as np
 import pandas as pd
 import plotly.express as px
+from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
-from torch_clustering import PyTorchKMeans
 
 from cryosiam.utils import parser_helper
 
@@ -47,46 +46,23 @@ def pca_reduce_dimensions(patches_embeddings, n=3):
     return pca_result
 
 
-def cluster_kmeans(features, num_clusters=4, pc=None, max_iter=1000, return_centers=True):
+def cluster_kmeans(embeddings, num_clusters=4, max_iter=1000, return_centers=True):
     """Perform clustering with given embeddings with kmeans
-    :param features: the embeddings for the image
-    :type features: np.array
+    :param embeddings: the embeddings
+    :type embeddings: np.array
     :param num_clusters: number of clusters for the Kmeans
     :type num_clusters: int
-    :param pc: number of principal components
-    :type pc: int or None
     :param return_centers: if the center of clusters should be returned
     :type return_centers: bool
     :return: segmentation of the image (and optional center of clusters)
     :rtype: np.array
     """
-    if pc is not None:
-        print(features.shape)
-        features = pca_reduce_dimensions(features.T, pc)
-        print(features.shape)
     print('kMeans')
-    if torch.cuda.is_available():
-        features = torch.from_numpy(features).cuda()
-    else:
-        features = torch.from_numpy(features)
-    clustering = PyTorchKMeans(n_clusters=num_clusters, max_iter=max_iter, init='k-means++')
-    labels = clustering.fit_predict(features)
-    labels = labels + 1
-    cluster_centers = clustering.cluster_centers_
-
-    if torch.cuda.is_available():
-        labels = labels.cpu().numpy()
-    else:
-        labels = labels.numpy()
-
+    clustering = KMeans(n_clusters=num_clusters, max_iter=max_iter, n_init='auto')
+    labels = clustering.fit_predict(embeddings)
     if return_centers:
-        if torch.cuda.is_available():
-            cluster_centers = cluster_centers.cpu().numpy()
-        else:
-            cluster_centers = cluster_centers.numpy()
-        return labels, cluster_centers
-    else:
-        return labels
+        return labels, clustering.cluster_centers_
+    return labels
 
 
 def visualize_features_space(image_features, filename, classes, labels, discrete_colors=True, distance='euclidean',
@@ -130,7 +106,8 @@ def visualize_features_space(image_features, filename, classes, labels, discrete
         data['class'] = data['class'].apply(str)
 
     if pca_components is None:
-        u = umap.UMAP(n_components=2, metric=distance, n_neighbors=n_neighbors, min_dist=min_dist, random_state=10)
+        u = umap.UMAP(n_components=2, metric=distance, n_neighbors=n_neighbors, min_dist=min_dist,
+                      random_state=10, n_jobs=1)
         projections = u.fit_transform(image_features)
         x, y = projections[:, 0], projections[:, 1]
     else:
@@ -179,8 +156,7 @@ def main(config_file_path):
             num_samples = f['number_of_samples'][()]
 
     clusters, centers = cluster_kmeans(embeddings,
-                                       cfg['clustering']['num_clusters'],
-                                       pc=cfg['clustering']['pca_components'],
+                                       cfg['clustering_kmeans']['num_clusters'],
                                        return_centers=True)
     clusters = clusters.flatten()
     print(f'Number or K-Means clusters: {np.unique(clusters).shape[0]}')
@@ -203,10 +179,10 @@ def main(config_file_path):
 
         df = pd.read_csv(os.path.join(prediction_folder, f'{filename}_instance_regions.csv'))
         df['semantic_class'] = predicted_labels
-        df.to_csv(os.path.join(prediction_folder, f'{filename}_instance_regions_clustered.csv'), index=False)
+        df.to_csv(os.path.join(prediction_folder, f'{filename}_instance_regions_kmeans_clustered.csv'), index=False)
         labels += [f'{filename}{cfg["file_extension"]}_{x}' for x in df['label']]
 
-    if cfg['clustering']['visualization']:
+    if cfg['clustering_kmeans']['visualization']:
         file = os.path.join(prediction_folder, f'kmeans_clusters.html')
         visualize_features_space(embeddings[:20000].T, file, clusters[:20000], labels[:20000])
 

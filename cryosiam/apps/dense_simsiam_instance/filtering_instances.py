@@ -43,7 +43,7 @@ def main(config_file_path, filename=None):
         with h5py.File(file_path.split(cfg['file_extension'])[0] + '_preds.h5', 'r') as f:
             semantic = f['labels'][()]
 
-        semantic = expand_labels((semantic == 1).astype(int))
+        semantic = expand_labels((semantic == 1).astype(int), 2)
         instances[~np.isin(instances, np.unique(instances[semantic == 1]))] = 0
 
         out_file = os.path.join(prediction_folder + '_filtered', os.path.basename(test_sample['file_name'][0]))
