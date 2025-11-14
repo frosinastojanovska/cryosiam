@@ -21,6 +21,7 @@ from monai.transforms import (
 )
 
 from cryosiam.utils import parser_helper
+from cryosiam.transforms import NumpyToTensord
 from cryosiam.data import MrcReader, PatchIter
 from cryosiam.apps.dense_simsiam_instance import load_backbone_model, load_prediction_model, instance_segmentation
 
@@ -65,6 +66,7 @@ def main(config_file_path, filename=None):
         [
             LoadImaged(keys='image', reader=reader),
             EnsureChannelFirstd(keys='image'),
+            NumpyToTensord(keys='image'),
             InvertIntensityd(keys='image') if config['noisy_input'] else Identity(key='image'),
             ScaleIntensityd(keys='image') if config['noisy_input'] else Identity(key='image'),
             ScaleIntensityRanged(keys='image', a_min=cfg['parameters']['data']['min'],

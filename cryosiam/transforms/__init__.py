@@ -1,4 +1,5 @@
 from .dictionary import (
+    NumpyToTensord,
     RandomSharpend,
     ClipIntensityd,
     ScaleIntensityd,
@@ -8,6 +9,7 @@ from .dictionary import (
     RandomHighPassSharpend
 )
 from .array import (
+    NumpyToTensor,
     RandomSharpen,
     ClipIntensity,
     ScaleIntensity,
