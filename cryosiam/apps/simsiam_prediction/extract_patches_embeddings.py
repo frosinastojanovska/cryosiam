@@ -37,7 +37,7 @@ def load_prediction_model(checkpoint_path, contrastive=False, device="cuda:0"):
     :return: SimSiam model with laoded trained weights
     :rtype: cryoet_torch.networks.nets.SimSiam
     """
-    checkpoint = torch.load(checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, weights_only=False)
     config = checkpoint['hyper_parameters']['backbone_config' if contrastive else 'config']
     model = SimSiam(block_type=config['parameters']['network']['block_type'],
                     n_input_channels=config['parameters']['network']['in_channels'],

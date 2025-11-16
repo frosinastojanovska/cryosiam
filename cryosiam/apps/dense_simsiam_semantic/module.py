@@ -42,7 +42,7 @@ class SemanticSegmentationModule(pl.LightningModule):
     def __init__(self, config, backbone_config):
         super().__init__()
         self.config = config
-        self.checkpoint = torch.load(config['pretrained_model'])
+        self.checkpoint = torch.load(config['pretrained_model'], weights_only=False)
         self._model_backbone = DenseSimSiam(block_type=backbone_config['parameters']['network']['block_type'],
                                             spatial_dims=backbone_config['parameters']['network']['spatial_dims'],
                                             n_input_channels=backbone_config['parameters']['network'][

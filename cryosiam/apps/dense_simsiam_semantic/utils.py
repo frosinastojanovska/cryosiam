@@ -16,7 +16,7 @@ def load_backbone_model(checkpoint_path, device="cuda:0"):
     :return: DenseSimSiam model with laoded trained weights
     :rtype: cryosiam.networks.nets.DenseSimSiam
     """
-    checkpoint = torch.load(checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, weights_only=False)
     config = checkpoint['hyper_parameters']['backbone_config']
     model_backbone = DenseSimSiam(block_type=config['parameters']['network']['block_type'],
                                   spatial_dims=config['parameters']['network']['spatial_dims'],
@@ -61,7 +61,7 @@ def load_prediction_model(checkpoint_path, device="cuda:0"):
     :return: InstanceHeads model with loaded trained weights
     :rtype: cryosiam.networks.nets.InstanceHeads
     """
-    checkpoint = torch.load(checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, weights_only=False)
     config = checkpoint['hyper_parameters']['config']
     model = SemanticHeads(n_input_channels=config['parameters']['network']['dense_dim'],
                           num_classes=config['parameters']['network']['out_channels'],

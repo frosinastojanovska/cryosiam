@@ -5,9 +5,12 @@ from cryosiam.apps.dense_simsiam_semantic.predict import main as semantic_predic
 from cryosiam.apps.dense_simsiam_instance.predict import main as instance_predict_main
 from cryosiam.apps.dense_simsiam_instance.filtering_instances import main as instance_filter_main
 from cryosiam.apps.dense_simsiam_semantic.prediction_postprocessing import main as semantic_postprocessing
+from cryosiam.apps.dense_simsiam_semantic.semantic_prediction_to_center_points import \
+    main as semantic_prediction_to_center_points
 from cryosiam.apps.simsiam_prediction.extract_patches_embeddings import main as extract_patches_embeddings_main
 from cryosiam.apps.simsiam_prediction.embeddings_kmeans_clustering import main as embeddings_kmeans_clustering_main
 from cryosiam.apps.simsiam_prediction.embeddings_spectral_clustering import main as embeddings_spectral_clustering_main
+from cryosiam.apps.simsiam_prediction.visualize_embeddings import main as visualize_embeddings_main
 
 from cryosiam.apps.dense_simsiam_semantic.filter_ground_truth_labels import main as semantic_filter_ground_truth
 from cryosiam.apps.dense_simsiam_semantic.preprocess_segmentation_maps import main as semantic_train_preprocess
@@ -60,6 +63,11 @@ def main():
                              help='Process only this specific tomogram filename', default=None)
     sp_semantic.set_defaults(func=lambda args: semantic_postprocessing(args.config_file, args.filename))
 
+    # semantic_to_centers subcommand
+    sp_semantic = subparsers.add_parser("semantic_to_centers", help="Run semantic segmentation postprocessing")
+    sp_semantic.add_argument('--config_file', type=str, required=True, help='Path to the .yaml configuration file')
+    sp_semantic.set_defaults(func=lambda args: semantic_prediction_to_center_points(args.config_file))
+
     # simsiam_embeddings_predict subcommand
     sp_simsiam = subparsers.add_parser("simsiam_embeddings_predict", help="Run SimSiam embeddings generation")
     sp_simsiam.add_argument('--config_file', type=str, required=True, help='Path to the .yaml configuration file')
@@ -78,6 +86,12 @@ def main():
                                        help="Run SimSiam embeddings spectral clustering")
     sp_simsiam.add_argument('--config_file', type=str, required=True, help='Path to the .yaml configuration file')
     sp_simsiam.set_defaults(func=lambda args: embeddings_spectral_clustering_main(args.config_file))
+
+    # simsiam_visualize_embeddings subcommand
+    sp_simsiam = subparsers.add_parser("simsiam_visualize_embeddings",
+                                       help="Run SimSiam visualize embeddings")
+    sp_simsiam.add_argument('--config_file', type=str, required=True, help='Path to the .yaml configuration file')
+    sp_simsiam.set_defaults(func=lambda args: visualize_embeddings_main(args.config_file))
 
     ############# Training commands #############
 

@@ -7,6 +7,7 @@ from monai.config.type_definitions import NdarrayOrTensor
 from monai.transforms.compose import MapTransform, RandomizableTransform
 
 from .array import (
+    NumpyToTensor,
     RandomSharpen,
     ClipIntensity,
     ScaleIntensity,
@@ -41,6 +42,30 @@ class ClipIntensityd(MapTransform):
         return d
 
 
+class NumpyToTensord(MapTransform):
+    """
+    Dictionary-based wrapper of :py:class:`cryoet_torch.transforms.ClipIntensity`.
+    """
+
+    backend = NumpyToTensor.backend
+
+    def __init__(self, keys: KeysCollection, allow_missing_keys: bool = False) -> None:
+        """
+        Args:
+            keys: keys of the corresponding items to be transformed.
+                See also: :py:class:`monai.transforms.compose.MapTransform`
+            allow_missing_keys: don't raise exception if key is missing.
+        """
+        super().__init__(keys, allow_missing_keys)
+        self.convert = NumpyToTensor()
+
+    def __call__(self, data) -> Dict[Hashable, NdarrayOrTensor]:
+        d = dict(data)
+        for key in self.key_iterator(d):
+            d[key] = self.convert(d[key])
+        return d
+
+
 class ScaleIntensityd(MapTransform):
     """
     Dictionary-based wrapper of :py:class:`cryoet_torch.transforms.ScaleIntensity`.
@@ -58,7 +83,7 @@ class ScaleIntensityd(MapTransform):
         """
         super().__init__(keys, allow_missing_keys)
         self.scale = ScaleIntensity(lower_percentage=lower_percentage,
-                                   upper_percentage=upper_percentage)
+                                    upper_percentage=upper_percentage)
 
     def __call__(self, data) -> Dict[Hashable, NdarrayOrTensor]:
         d = dict(data)

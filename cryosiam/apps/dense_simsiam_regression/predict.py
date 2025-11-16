@@ -26,14 +26,12 @@ def main(config_file_path, filename):
     with open(config_file_path, "r") as ymlfile:
         cfg = yaml.safe_load(ymlfile)
 
-    if 'trained_model' in cfg and cfg['trained_model'] is not None:
-        checkpoint_path = cfg['trained_model']
-    else:
-        checkpoint_path = os.path.join(cfg['log_dir'], 'model', 'model_best.ckpt')
+    checkpoint_path = cfg['trained_model']
+
     backbone = load_backbone_model(checkpoint_path)
     prediction_model = load_prediction_model(checkpoint_path)
 
-    checkpoint = torch.load(checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, weights_only=False)
     net_config = checkpoint['hyper_parameters']['config']
 
     test_folder = cfg['data_folder']

@@ -21,6 +21,7 @@ from monai.transforms import (
 )
 
 from cryosiam.utils import parser_helper
+from cryosiam.transforms import NumpyToTensord
 from cryosiam.data import MrcReader, PatchIter
 from cryosiam.apps.dense_simsiam_instance import load_backbone_model, load_prediction_model, instance_segmentation
 
@@ -36,7 +37,7 @@ def main(config_file_path, filename=None):
     backbone = load_backbone_model(checkpoint_path)
     prediction_model = load_prediction_model(checkpoint_path)
 
-    checkpoint = torch.load(checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, weights_only=False)
     net_config = checkpoint['hyper_parameters']['config']
 
     test_folder = cfg['data_folder']
@@ -65,6 +66,7 @@ def main(config_file_path, filename=None):
         [
             LoadImaged(keys='image', reader=reader),
             EnsureChannelFirstd(keys='image'),
+            NumpyToTensord(keys='image'),
             ScaleIntensityRanged(keys='image', a_min=cfg['parameters']['data']['min'],
                                  a_max=cfg['parameters']['data']['max'], b_min=0, b_max=1, clip=True),
             NormalizeIntensityd(keys='image', subtrahend=cfg['parameters']['data']['mean'],

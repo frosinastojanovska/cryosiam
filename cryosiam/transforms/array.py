@@ -30,6 +30,23 @@ class ClipIntensity(Transform):
         return out
 
 
+class NumpyToTensor(Transform):
+    """
+        Scale intensity for the entire image by removing lower and upper percentage
+    """
+
+    backend = [TransformBackends.TORCH, TransformBackends.NUMPY]
+
+    def __call__(self, img: NdarrayOrTensor) -> NdarrayOrTensor:
+        """
+        Apply the transform to `img`.
+        """
+        img = convert_to_tensor(img, track_meta=get_track_meta())
+        img_t, *_ = convert_data_type(img, np.ndarray, dtype=np.float32)
+        out, *_ = convert_data_type(data=img_t, dtype=img.dtype)
+        return out
+
+
 class ScaleIntensity(Transform):
     """
         Scale intensity for the entire image by removing lower and upper percentage

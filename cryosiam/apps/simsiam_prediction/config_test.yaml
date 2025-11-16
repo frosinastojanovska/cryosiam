@@ -31,8 +31,6 @@ visualization:
   visualization_suffix: 'instance_regions_clusters.csv'
   visualize_umap: True
   3d_umap: False
-  visualize_3d_mask: True
-  3d_mask_extension: '.mrc' # either .mrc or .h5
 
 parameters:
   gpu_devices: 0

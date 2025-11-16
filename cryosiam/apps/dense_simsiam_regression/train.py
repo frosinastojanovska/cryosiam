@@ -22,7 +22,7 @@ def main(config_file_path):
     os.makedirs(cfg['log_dir'], exist_ok=True)
 
     # initialise the LightningModule
-    checkpoint = torch.load(cfg['pretrained_model'])
+    checkpoint = torch.load(cfg['pretrained_model'], weights_only=False)
     backbone_config = checkpoint['hyper_parameters']['config']
     net = RegressionModule(cfg, backbone_config)
 
