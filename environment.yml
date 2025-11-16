@@ -21,6 +21,7 @@ dependencies:
   - lightning
   - monai
   - mrcfile
+  - starfile
   - scikit-image
   - pip
   - pip:

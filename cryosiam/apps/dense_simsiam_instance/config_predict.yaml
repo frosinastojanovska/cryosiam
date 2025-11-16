@@ -5,7 +5,6 @@ semantic_foreground_labels: [ 2 ]
 mask_folder: ''
 log_dir: '/scratch/stojanov/development/cryosiam/experiments/dense_simsiam_instance'
 prediction_folder: '/scratch/stojanov/development/cryosiam/experiments/dense_simsiam_instance/predictions'
-filtering_mask_folder: '/g/zaugg/stojanov/simulated_datasets/final_models/dense_simsiam_instance/predictions/semantic'
 trained_model: '/scratch/stojanov/development/cryosiam/experiments/dense_simsiam_instance/model/model-best.ckpt'
 file_extension: '.mrc'
 
@@ -13,6 +12,10 @@ test_files: [ 'TS_56_6.80Apx.mrc', 'TS_61_6.80Apx.mrc' ]
 
 save_raw_predictions: False
 eval_skip_prediction: False
+
+filtering_mask_folder: '/g/zaugg/stojanov/simulated_datasets/final_models/dense_simsiam_instance/predictions/semantic'
+filtering_mask_expand_voxels: 2
+filtering_mask_labels: [1]
 
 parameters:
   gpu_devices: 1

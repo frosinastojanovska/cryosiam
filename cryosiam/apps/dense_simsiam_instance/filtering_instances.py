@@ -43,8 +43,8 @@ def main(config_file_path, filename=None):
         with h5py.File(file_path.split(cfg['file_extension'])[0] + '_preds.h5', 'r') as f:
             semantic = f['labels'][()]
 
-        semantic = expand_labels((semantic == 1).astype(int), 2)
-        instances[~np.isin(instances, np.unique(instances[semantic == 1]))] = 0
+        semantic = expand_labels((np.isin(semantic, cfg['filtering_mask_labels'])).astype(int),cfg['filtering_mask_expand_voxels'])
+        instances[~np.isin(instances, np.unique(instances[np.isin(semantic, cfg['filtering_mask_labels'])]))] = 0
 
         out_file = os.path.join(prediction_folder + '_filtered', os.path.basename(test_sample['file_name'][0]))
         suffix = f'_instance_preds.h5'
