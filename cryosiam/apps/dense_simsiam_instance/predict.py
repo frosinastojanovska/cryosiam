@@ -141,8 +141,8 @@ def main(config_file_path, filename=None):
                                    0] + '_preds.h5'
                     with h5py.File(os.path.join(mask_folder, filename), 'r') as f:
                         mask = f['labels'][()].astype(np.int8)
-                    if mask.shape != input_size:
-                        mask = resize(mask, input_size, mode='constant', preserve_range=True).astype(np.int8)
+                    if mask.shape != original_size:
+                        mask = resize(mask, original_size, mode='constant', preserve_range=True).astype(np.int8)
                     foreground_out = foreground_out * mask
                     distances_out = distances_out * mask
                     boundaries_out = boundaries_out * mask
@@ -186,8 +186,8 @@ def main(config_file_path, filename=None):
             with open(regions_file, 'w') as f:
                 w = csv.writer(f)
                 w.writerow(list(regions.keys()))
-                for i in range(regions['label'].shape[0]):
-                    w.writerow([regions[l][i] for l in regions.keys()])
+                for ind in range(regions['label'].shape[0]):
+                    w.writerow([regions[l][ind] for l in regions.keys()])
 
 
 if __name__ == "__main__":

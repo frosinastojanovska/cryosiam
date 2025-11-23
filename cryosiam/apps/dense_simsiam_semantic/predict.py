@@ -145,8 +145,8 @@ def main(config_file_path, filename):
                 filename = os.path.basename(test_sample['file_name'][0]).split(cfg['file_extension'])[0] + '_preds.h5'
                 with h5py.File(os.path.join(mask_folder, filename), 'r') as f:
                     mask = f['labels'][()].astype(np.int8)
-                if mask.shape != input_size:
-                    mask = resize(mask, input_size, mode='constant', preserve_range=True).astype(np.int8)
+                if mask.shape != original_size:
+                    mask = resize(mask, original_size, mode='constant', preserve_range=True).astype(np.int8)
                 labels_out = labels_out * mask
                 probs_out = probs_out * mask
                 distances_out = distances_out * mask
