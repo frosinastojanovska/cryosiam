@@ -39,6 +39,8 @@ parameters:
     combine_transforms: True
     use_noisy_input: False
     scale_intensity_factors: null
+    zoom: [0.8, 1.2]
+    rotate: [3.14, 3.14, 3.14]
   network:
     in_channels: 1
     spatial_dims: 3

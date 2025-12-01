@@ -22,6 +22,7 @@ from monai.transforms import (
     SqueezeDimd,
     SpatialPadd,
     EnsureTyped,
+    RandRotated,
     RandScaleIntensityd,
     NormalizeIntensityd,
     EnsureChannelFirstd,
@@ -206,6 +207,14 @@ class SemanticSegmentationModule(pl.LightningModule):
                                               padding_mode='constant') if 'zoom' in self.config['parameters'][
                                         'transforms'] and self.config['parameters']['transforms'][
                                                                               'zoom'] else Identityd(keys=['image']),
+                                    RandRotated(keys=keys + ['labels', 'distances'], prob=0.8,
+                                                range_x=self.config['parameters']['transforms']['rotate'][0],
+                                                range_y=self.config['parameters']['transforms']['rotate'][1],
+                                                range_z=self.config['parameters']['transforms']['rotate'][2],
+                                                padding_mode='zeros')
+                                    if 'rotate' in self.config['parameters'][
+                                        'transforms'] and self.config['parameters']['transforms'][
+                                           'rotate'] else Identityd(keys=['image']),
                                     SqueezeDimd(keys=['labels'],
                                                 dim=0) if self.config['parameters']['network']['out_channels'] > 1
                                     else Identityd(keys=['labels']),
