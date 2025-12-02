@@ -1,5 +1,6 @@
 data_folder: '/g/zaugg/stojanov/simulated_datasets/experiments/dense_simsiam_regression/predictions/'
 labels_folder: '/g/mahamid/stojanov/simulated_datasets/simulated_data/tomograms/instance_full_refined/'
+noisy_data_folder: null
 patches_folder: '/scratch/stojanov/simulated_datasets/final_models/dense_simsiam_instance/patches_denoised'
 temp_dir: '/scratch/stojanov/simulated_datasets/final_models/dense_simsiam_instance'
 log_dir: '/g/zaugg/stojanov/simulated_datasets/final_models/dense_simsiam_instance'

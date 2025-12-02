@@ -17,7 +17,7 @@ def main(config_file_path):
     reader = MrcReader(read_in_mem=True)
 
     data_folder = cfg['data_folder']
-    noisy_data_folder = cfg['noisy_data_folder'] if 'noisy_data_folder' in cfg else None
+    noisy_data_folder = cfg['noisy_data_folder'] if 'noisy_data_folder' in cfg and cfg['noisy_data_folder'] else None
     temp_dir = cfg['temp_dir']
     patches_folder = cfg['patches_folder']
     patch_size = cfg['parameters']['data']['patch_size']

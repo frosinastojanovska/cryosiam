@@ -18,11 +18,10 @@ def main(config_file_path):
     reader = MrcReader(read_in_mem=True)
     labels_reader = MrcReader(read_in_mem=True)
 
-
     distance_reader = NumpyReader(npz_keys='data', channel_dim=0)
 
     data_folder = cfg['data_folder']
-    noisy_data_folder = cfg['noisy_data_folder'] if 'noisy_data_folder' in cfg else None
+    noisy_data_folder = cfg['noisy_data_folder'] if 'noisy_data_folder' in cfg and cfg['noisy_data_folder'] else None
     labels_folder = cfg['labels_folder']
     patches_folder = cfg['patches_folder']
     temp_dir = cfg['temp_dir']
