@@ -149,14 +149,16 @@ def main():
                             help='radius in number of pixels for the sphere')
     sp_process.add_argument('--output_dir', type=str, required=True,
                             help='path to folder to save the output tomogram/s')
-    sp_process.add_argument('--example_tomogram', type=str, required=True,
-                            help='path to one tomogram to determine the 3D size of the output')
+    sp_process.add_argument('--tomogram_path', type=str, required=True,
+                            help='path to one folder with tomograms to determine the 3D size of the output. '
+                                 'If the path is path to one tomogram, it will use the size of that tomogram '
+                                 'to all of the tomograms')
     sp_process.add_argument('--tomo_name', type=str, required=False,
                             help='process only this tomogram, the name should match the rlnMicrographName in '
                                  'the starfile or the tomo in the csv file')
     sp_process.set_defaults(
         func=lambda args: create_sphere_mask_from_coordinates_main(args.coordinates_file, args.sphere_radius,
-                                                                   args.output_dir, args.example_tomogram,
+                                                                   args.output_dir, args.tomogram_path,
                                                                    args.tomo_name))
 
     # Create multiclass sphere mask
@@ -172,14 +174,16 @@ def main():
                                  'N integers separated by comma, where N is the number of different classes of particles')
     sp_process.add_argument('--output_dir', type=str, required=True,
                             help='path to folder to save the output tomogram/s')
-    sp_process.add_argument('--example_tomogram', type=str, required=True,
-                            help='path to one tomogram to determine the 3D size of the output')
+    sp_process.add_argument('--tomogram_path', type=str, required=True,
+                            help='path to one folder with tomograms to determine the 3D size of the output. '
+                                 'If the path is path to one tomogram, it will use the size of that tomogram '
+                                 'to all of the tomograms')
     sp_process.add_argument('--tomo_name', type=str, required=False,
                             help='process only this tomogram, the name should match the rlnMicrographName in '
                                  'the starfile or the tomo in the csv file')
     sp_process.set_defaults(
         func=lambda args: create_sphere_mask_from_coordinates_multiclass_main(args.coordinates_file, args.sphere_radius,
-                                                                              args.output_dir, args.example_tomogram,
+                                                                              args.output_dir, args.tomogram_path,
                                                                               args.tomo_name))
 
     args = parser.parse_args()

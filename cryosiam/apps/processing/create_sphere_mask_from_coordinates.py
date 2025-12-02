@@ -31,7 +31,7 @@ def read_star_file(star_file):
     return data[['rlnCoordinateZ', 'rlnCoordinateY', 'rlnCoordinateX']]
 
 
-def main(coordinates_file, sphere_radius, output_dir, example_tomogram, tomo_name):
+def main(coordinates_file, sphere_radius, output_dir, tomogram_path, tomo_name):
     os.makedirs(output_dir, exist_ok=True)
     if coordinates_file.endswith('.mrc'):
         data = read_star_file(coordinates_file)
@@ -51,19 +51,25 @@ def main(coordinates_file, sphere_radius, output_dir, example_tomogram, tomo_nam
         data = data[data[header_name] == tomo_name]
 
     reader = MrcReader(read_in_mem=True)
-    tomogram = reader.read(example_tomogram)
-    voxel_size = tomogram.voxel_size
-    tomogram = tomogram.data
-    tomogram.setflags(write=True)
+    if not os.path.isdir(tomogram_path):
+        tomogram = reader.read(tomogram_path)
+        voxel_size = tomogram.voxel_size
+        tomogram = tomogram.data
+        tomogram.setflags(write=True)
 
     sphere = (create_sphere(radius=sphere_radius) > -0.5).astype(np.uint8)
 
     radius = sphere.shape[0] // 2
-    size = tomogram.shape
-    z_dim, y_dim, x_dim = size
 
     for t_name in np.unique(data[header_name]):
         print(f'Processing tomo: {t_name}')
+        if os.path.isdir(tomogram_path):
+            tomogram = reader.read(os.path.join(tomogram_path, t_name + '.mrc'))
+            voxel_size = tomogram.voxel_size
+            tomogram = tomogram.data
+            tomogram.setflags(write=True)
+        size = tomogram.shape
+        z_dim, y_dim, x_dim = size
         current_data = data[data[header_name] == t_name]
         print(f'Placing {current_data.shape[0]} instances')
         output = np.zeros(size)
@@ -112,7 +118,7 @@ def parser_helper(description=None):
     parser.add_argument('--sphere_radius', type=int, required=True,
                         help='radius in number of pixels for the sphere')
     parser.add_argument('--output_dir', type=str, required=True, help='path to folder to save the output tomogram/s')
-    parser.add_argument('--example_tomogram', type=str, required=True,
+    parser.add_argument('--tomogram_path', type=str, required=True,
                         help='path to one tomogram to determine the 3D size of the output')
     parser.add_argument('--tomo_name', type=str, required=False,
                         help='process only this tomogram, the name should match the rlnMicrographName in '
@@ -123,4 +129,4 @@ def parser_helper(description=None):
 if __name__ == '__main__':
     parser = parser_helper()
     args = parser.parse_args()
-    main(args.coordinates_file, args.sphere_radius, args.output_dir, args.example_tomogram, args.tomo_name)
+    main(args.coordinates_file, args.sphere_radius, args.output_dir, args.tomogram_path, args.tomo_name)

@@ -31,7 +31,7 @@ def read_star_file(star_file):
     return data[['rlnCoordinateZ', 'rlnCoordinateY', 'rlnCoordinateX']]
 
 
-def main(coordinates_file, sphere_radiuses, output_dir, example_tomogram, tomo_name):
+def main(coordinates_file, sphere_radiuses, output_dir, tomogram_path, tomo_name):
     os.makedirs(output_dir, exist_ok=True)
     if coordinates_file.endswith('.mrc'):
         data = read_star_file(coordinates_file)
@@ -51,17 +51,23 @@ def main(coordinates_file, sphere_radiuses, output_dir, example_tomogram, tomo_n
         data = data[data[header_name] == tomo_name]
 
     reader = MrcReader(read_in_mem=True)
-    tomogram = reader.read(example_tomogram)
-    voxel_size = tomogram.voxel_size
-    tomogram = tomogram.data
-    tomogram.setflags(write=True)
-    size = tomogram.shape
-    z_dim, y_dim, x_dim = size
+    if not os.path.isdir(tomogram_path):
+        tomogram = reader.read(tomogram_path)
+        voxel_size = tomogram.voxel_size
+        tomogram = tomogram.data
+        tomogram.setflags(write=True)
 
     sphere_radiuses = [int(x) for x in sphere_radiuses.split(',')]
 
     for t_name in np.unique(data[header_name]):
         print(f'Processing tomo: {t_name}')
+        if os.path.isdir(tomogram_path):
+            tomogram = reader.read(os.path.join(tomogram_path, t_name + '.mrc'))
+            voxel_size = tomogram.voxel_size
+            tomogram = tomogram.data
+            tomogram.setflags(write=True)
+        size = tomogram.shape
+        z_dim, y_dim, x_dim = size
         current_data = data[data[header_name] == t_name]
         print(f'Placing {current_data.shape[0]} instances')
         output = np.zeros(size)
@@ -85,6 +91,8 @@ def main(coordinates_file, sphere_radiuses, output_dir, example_tomogram, tomo_n
                     x = int(row['centroid-2'])
                     y = int(row['centroid-1'])
                     z = int(row['centroid-0'])
+                if x + radius // 2 > x_dim or x - radius // 2 < 0 or y + radius // 2 > y_dim or y - radius // 2 < 0 or z + radius // 2 > z_dim or z - radius // 2 < 0:
+                    continue
                 rotated_ref = sphere[
                               max(radius - z, 0): (
                                   radius + z_dim - z if z_dim - z <= radius else radius * 2
@@ -123,8 +131,10 @@ def parser_helper(description=None):
                         help='radius in number of pixels for the sphere for different classes. The expected input is '
                              'N integers separated by comma, where N is the number of different classes of particles')
     parser.add_argument('--output_dir', type=str, required=True, help='path to folder to save the output tomogram/s')
-    parser.add_argument('--example_tomogram', type=str, required=True,
-                        help='path to one tomogram to determine the 3D size of the output')
+    parser.add_argument('--tomogram_path', type=str, required=True,
+                        help='path to one folder with tomograms to determine the 3D size of the output. '
+                             'If the path is path to one tomogram, it will use the size of that tomogram '
+                             'to all of the tomograms')
     parser.add_argument('--tomo_name', type=str, required=False,
                         help='process only this tomogram, the name should match the rlnMicrographName in '
                              'the starfile or the tomo in the csv file')
@@ -134,4 +144,4 @@ def parser_helper(description=None):
 if __name__ == '__main__':
     parser = parser_helper()
     args = parser.parse_args()
-    main(args.coordinates_file, args.sphere_radius, args.output_dir, args.example_tomogram, args.tomo_name)
+    main(args.coordinates_file, args.sphere_radius, args.output_dir, args.tomogram_path, args.tomo_name)
