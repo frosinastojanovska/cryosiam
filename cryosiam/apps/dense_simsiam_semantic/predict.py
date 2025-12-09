@@ -87,6 +87,8 @@ def main(config_file_path, filename):
     print('Prediction')
     with torch.no_grad():
         for i, test_sample in enumerate(test_loader):
+            current_file = test_sample['file_name'][0]
+            print(f'Running prediction for file {current_file}')
             out_file = os.path.join(prediction_folder, os.path.basename(test_sample['file_name'][0]))
             original_size = test_sample['image'][0][0].shape
             img = pad_transform(test_sample['image'][0])
@@ -142,6 +144,7 @@ def main(config_file_path, filename):
             distances_out = distances_out[(slice(0, num_classes, ),) + tuple([slice(0, n) for n in original_size])]
 
             if mask_folder:
+                print(f'Masking out of file {current_file}')
                 filename = os.path.basename(test_sample['file_name'][0]).split(cfg['file_extension'])[0] + '_preds.h5'
                 with h5py.File(os.path.join(mask_folder, filename), 'r') as f:
                     mask = f['labels'][()].astype(np.int8)
@@ -152,6 +155,7 @@ def main(config_file_path, filename):
                 distances_out = distances_out * mask
 
             if 'postprocessing' in cfg['parameters']['network'] and cfg['parameters']['network']['postprocessing']:
+                print(f'Postprocessing file {current_file}')
                 largest_cc = get_largest_cc(probs_out[0], threshold)
                 if '3d_postprocessing' in cfg['parameters']['network'] and cfg['parameters']['network'][
                     '3d_postprocessing']:
@@ -165,14 +169,18 @@ def main(config_file_path, filename):
                         labels_out = pyramid_expand(labels_out, 4, preserve_range=True)[:size[0], :size[1]].astype(int)
                 else:
                     for ind in range(largest_cc.shape[0]):
+                        if np.sum(largest_cc[ind]) == 0:
+                            continue
                         labels_out[ind] = convex_hull_image(largest_cc[ind])
 
             if 'save_internal_files' in cfg and cfg['save_internal_files']:
+                print(f'Saving predictions for file {current_file}')
                 with h5py.File(out_file.split(cfg['file_extension'])[0] + '_preds.h5', 'w') as f:
                     f.create_dataset('labels', data=labels_out)
                     f.create_dataset('probs', data=probs_out)
                     f.create_dataset('distances', data=distances_out)
             else:
+                print(f'Saving predictions for file {current_file}')
                 if 'save_original_file_extension' in cfg and cfg['save_original_file_extension']:
                     writer.set_data_array(labels_out.astype(np.uint8), channel_dim=None)
                     writer.write(out_file)

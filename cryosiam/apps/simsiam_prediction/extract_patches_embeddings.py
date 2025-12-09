@@ -145,6 +145,8 @@ def main(config_file_path, filename=None):
     print('Prediction')
     with torch.no_grad():
         for i, test_sample in enumerate(test_loader):
+            current_file = test_sample['file_name'][0]
+            print(f'Running prediction for file {current_file}')
             out_file = os.path.join(prediction_folder, os.path.basename(test_sample['file_name'][0]))
             if os.path.exists(out_file.split(cfg['file_extension'])[0] + '_embeds.h5'):
                 print('Skipping', out_file)
@@ -202,6 +204,8 @@ def main(config_file_path, filename=None):
                     embeds[:, item_ind] = e_batch
                     tags[item_ind] = l_batch
                     item_ind += 1
+
+            print(f'Saving predictions for file {current_file}')
             with h5py.File(out_file.split(cfg['file_extension'])[0] + '_embeds.h5', 'w') as f:
                 f.create_dataset('embeddings', data=embeds)
             with h5py.File(out_file.split(cfg['file_extension'])[0] + '_instance_labels.h5', 'w') as f:

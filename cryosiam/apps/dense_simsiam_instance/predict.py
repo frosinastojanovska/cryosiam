@@ -87,6 +87,8 @@ def main(config_file_path, filename=None):
     print('Prediction')
     with torch.no_grad():
         for i, test_sample in enumerate(test_loader):
+            current_file = test_sample['file_name'][0]
+            print(f'Running prediction for file {current_file}')
             out_file = os.path.join(prediction_folder, os.path.basename(test_sample['file_name'][0]))
             original_size = test_sample['image'][0][0].shape
             img = pad_transform(test_sample['image'][0])
@@ -137,6 +139,7 @@ def main(config_file_path, filename=None):
                 boundaries_out = boundaries_out[tuple([slice(0, n) for n in original_size])]
 
                 if mask_folder:
+                    print(f'Masking out of file {current_file}')
                     filename = os.path.basename(test_sample['file_name'][0]).split(cfg['file_extension'])[
                                    0] + '_preds.h5'
                     with h5py.File(os.path.join(mask_folder, filename), 'r') as f:
@@ -176,6 +179,7 @@ def main(config_file_path, filename=None):
                                                         'threshold_foreground'],
                                                     distance_type=cfg['parameters']['network']['distance_type'],
                                                     postprocessing=postprocessing)
+            print(f'Saving predictions for file {current_file}')
             suffix = f'_instance_preds.h5'
             with h5py.File(out_file.split(cfg['file_extension'])[0] + suffix, 'w') as f:
                 f.create_dataset('instances', data=instance_labels)
