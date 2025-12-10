@@ -40,7 +40,8 @@ def main(config_file_path, filename=None):
     writer = MrcWriter()
 
     if files is None:
-        files = [x for x in os.listdir(data_folder) if os.path.isfile(os.path.join(data_folder, x))]
+        files = [x for x in os.listdir(data_folder) if os.path.isfile(os.path.join(data_folder, x)) and
+                 x.endswith(cfg['file_extension'])]
 
     print('Post-processing')
     for file in files:
