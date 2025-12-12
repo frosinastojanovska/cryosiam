@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from skimage.segmentation import expand_labels
 from monai.data import Dataset, list_data_collate
 
+from cryosiam.data import MrcReader
 from cryosiam.utils import parser_helper
 
 
@@ -33,6 +34,8 @@ def main(config_file_path, filename=None):
     test_dataset = Dataset(data=test_data)
     test_loader = DataLoader(test_dataset, batch_size=1, num_workers=1, collate_fn=list_data_collate)
 
+    reader = MrcReader(read_in_mem=True)
+
     print('Prediction')
     for i, test_sample in enumerate(test_loader):
         out_file = os.path.join(prediction_folder, os.path.basename(test_sample['file_name'][0]))
@@ -40,10 +43,16 @@ def main(config_file_path, filename=None):
             instances = f['instances'][()]
 
         file_path = os.path.join(semantic_mask, os.path.basename(test_sample['file_name'][0]))
-        with h5py.File(file_path.split(cfg['file_extension'])[0] + '_preds.h5', 'r') as f:
-            semantic = f['labels'][()]
+        if 'filtering_mask_extension' in cfg and cfg['filtering_mask_extension'] in ['.mrc', '.rec']:
+            semantic = reader.read(file_path.split(cfg['file_extension'])[0] + cfg['filtering_mask_extension'])
+            semantic = semantic.data
+            semantic.setflags(write=True)
+        else:
+            with h5py.File(file_path.split(cfg['file_extension'])[0] + '_preds.h5', 'r') as f:
+                semantic = f['labels'][()]
 
-        semantic = expand_labels((np.isin(semantic, cfg['filtering_mask_labels'])).astype(int),cfg['filtering_mask_expand_voxels'])
+        semantic = expand_labels((np.isin(semantic, cfg['filtering_mask_labels'])).astype(int),
+                                 cfg['filtering_mask_expand_voxels'])
         instances[~np.isin(instances, np.unique(instances[np.isin(semantic, cfg['filtering_mask_labels'])]))] = 0
 
         out_file = os.path.join(prediction_folder + '_filtered', os.path.basename(test_sample['file_name'][0]))
