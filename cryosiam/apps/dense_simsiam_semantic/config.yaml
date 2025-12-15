@@ -38,12 +38,13 @@ parameters:
     high_pass_sigma_range: [ 0.1, 0.5 ]
     high_pass_sigma2_range: [ 4, 5 ]
     noise_sigma_range: [ 0.1, 0.5 ]
-    combine_transforms: True
+    combine_transforms: False
     use_noisy_input: False
     scale_intensity_factors: null
     elastic: [5, 10]
     zoom: [0.8, 1.2]
     rotate: [3.14, 3.14, 3.14]
+    flip: True
   network:
     in_channels: 1
     spatial_dims: 3
