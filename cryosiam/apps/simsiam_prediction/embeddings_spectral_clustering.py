@@ -241,6 +241,13 @@ def main(config_file_path):
         df['semantic_class'] = predicted_labels
         df.to_csv(os.path.join(prediction_folder, f'{filename}_instance_regions_spectral_clustered.csv'), index=False)
         labels += [f'{filename}{cfg["file_extension"]}_{x}' for x in df['label']]
+        df.rename(columns={'centroid-0': 'rlnCoordinateZ', 'centroid-1': 'rlnCoordinateY',
+                           'centroid-2': 'rlnCoordinateX', 'tomo': 'rlnMicrographName',
+                           'bbox-0': 'rlnBbox-0', 'bbox-1': 'rlnBbox-1', 'bbox-2': 'rlnBbox-2',
+                           'bbox-3': 'rlnBbox-3', 'bbox-4': 'rlnBbox-4', 'bbox-5': 'rlnBbox-5',
+                           'label': 'rlnLabel', 'area': 'rlnArea', 'semantic_class': 'rlnClass'}, inplace=True)
+        starfile.write(df, os.path.join(prediction_folder, f'{filename}_instance_regions_kmeans_clustered.star'),
+                       overwrite=True)
 
     if cfg['clustering_spectral']['visualization']:
         file = os.path.join(prediction_folder, f'spectral_clusters.html')

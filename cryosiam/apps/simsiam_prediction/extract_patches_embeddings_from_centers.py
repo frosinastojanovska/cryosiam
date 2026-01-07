@@ -1,15 +1,11 @@
 import os
-import csv
 import h5py
 import yaml
 import torch
 import starfile
+import collections
 import numpy as np
 import pandas as pd
-import collections
-from skimage.measure import regionprops_table
-from skimage.segmentation import expand_labels
-from skimage.morphology import convex_hull_image
 
 from torch.utils.data import DataLoader
 from monai.data import Dataset, list_data_collate, ArrayDataset
@@ -60,34 +56,18 @@ def load_prediction_model(checkpoint_path, contrastive=False, device="cuda:0"):
     return model
 
 
-def extract_patches_from_instances_mask(image, instances_mask, regions=None, min_particle_size=None,
-                                        max_particle_size=None, masking=0, expand_labels_size=1):
+def extract_patches_from_centers(image, regions, box_size):
     patches = []
     labels = []
-    instances_mask = expand_labels(instances_mask, distance=expand_labels_size)
-    if regions is None:
-        regions = regionprops_table(instances_mask, properties=['label', 'area', 'bbox', 'centroid'])
-    regions['hull_area'] = [0] * regions['label'].shape[0]
+    max_z, max_y, max_x = image.shape
     filtered_regions = {key: [] for key in regions.keys()}
     for i in range(regions['label'].shape[0]):
-        if min_particle_size and regions['area'][i] < min_particle_size:
-            continue
-        if max_particle_size and regions['area'][i] > max_particle_size:
-            continue
         labels.append(regions['label'][i])
-        mask = instances_mask == regions['label'][i]
-        slices = (slice(regions['bbox-0'][i], regions['bbox-3'][i]),
-                  slice(regions['bbox-1'][i], regions['bbox-4'][i]),
-                  slice(regions['bbox-2'][i], regions['bbox-5'][i]))
-        sub_mask = mask[slices]
+        slices = (slice(min(regions['centroid-0'][i] - box_size, 0), min(regions['centroid-0'][i] + box_size, max_z)),
+                  slice(min(regions['centroid-1'][i] - box_size, 0), min(regions['centroid-1'][i] + box_size, max_y)),
+                  slice(min(regions['centroid-2'][i] - box_size, 0), min(regions['centroid-2'][i]) + box_size, max_x))
         patch = image[slices].copy()
-        if masking == 1:
-            hull_mask = convex_hull_image(sub_mask)
-            patch[hull_mask == 0] = 0
-        elif masking == 2:
-            patch[sub_mask == 0] = 0
         patches.append(patch)
-        regions['hull_area'][i] = np.sum(hull_mask) if masking == 1 else 0
         for key in regions.keys():
             filtered_regions[key].append(regions[key][i])
     return patches, labels, filtered_regions
@@ -108,7 +88,8 @@ def main(config_file_path, filename=None):
         net = load_prediction_model(checkpoint_path, contrastive=False)
 
     test_folder = cfg['data_folder']
-    instances_mask_folder = cfg['instances_mask_folder']
+    centers_file = cfg['centers_file']
+    centers_patch_size = cfg['centers_patch_size']
     prediction_folder = cfg['prediction_folder']
     os.makedirs(prediction_folder, exist_ok=True)
     files = cfg['test_files']
@@ -122,7 +103,6 @@ def main(config_file_path, filename=None):
     test_data = []
     for idx, file in enumerate(files):
         test_data.append({'image': os.path.join(test_folder, file),
-                          'mask': os.path.join(instances_mask_folder, file),
                           'file_name': os.path.join(test_folder, file)})
     reader = MrcReader(read_in_mem=True)
     transforms = Compose(
@@ -144,6 +124,22 @@ def main(config_file_path, filename=None):
     test_dataset = Dataset(data=test_data, transform=transforms)
     test_loader = DataLoader(test_dataset, batch_size=1, num_workers=1, collate_fn=list_data_collate)
 
+    if centers_file.endswith('.star'):
+        regions = starfile.read(centers_file)
+        if 'data' in regions:
+            regions = regions['data']
+        if 'rlnLabel' not in regions.keys():
+            regions.insert(0, 'rlnLabel', range(1, 1 + len(regions)))
+        starfile.write(os.path.join(prediction_folder, 'centers_with_labels.star'), overwrite=True)
+        regions.rename(columns={'rlnCoordinateZ': 'centroid-0', 'rlnCoordinateY': 'centroid-1',
+                                'rlnCoordinateX': 'centroid-2', 'rlnMicrographName': 'tomo',
+                                'enlLabel': 'label', 'area': 'rlnArea'}, errors='ignore', inplace=True)
+    else:
+        regions = pd.read_csv(centers_file)
+        if 'label' not in regions.keys():
+            regions.insert(0, 'label', range(1, 1 + len(regions)))
+        regions.to_csv(os.path.join(prediction_folder, 'centers_with_labels.csv'), index=False)
+
     print('Prediction')
     with torch.no_grad():
         for i, test_sample in enumerate(test_loader):
@@ -153,40 +149,13 @@ def main(config_file_path, filename=None):
             if os.path.exists(out_file.split(cfg['file_extension'])[0] + '_embeds.h5'):
                 print('Skipping', out_file)
                 continue
-            if 'instances' in cfg:
-                min_dist = cfg['instances']['min_center_distance']
-                max_dist = cfg['instances']['max_center_distance']
-                suffix = f'_min-{min_dist}_max-{max_dist}'
-            else:
-                suffix = ''
-            instances_file_name = os.path.basename(test_sample['file_name'][0]).split(cfg['file_extension'])[
-                                      0] + f'_instance_preds{suffix}.h5'
-            if not os.path.exists(os.path.join(instances_mask_folder, instances_file_name)):
-                continue
-            with h5py.File(os.path.join(instances_mask_folder, instances_file_name)) as f:
-                mask = f['instances'][()]
-            regions_file_name = os.path.join(instances_mask_folder,
-                                             os.path.basename(test_sample['file_name'][0]).split(cfg['file_extension'])[
-                                                 0] + f'_instance_regions{suffix}.csv')
-            if os.path.exists(regions_file_name):
-                regions = collections.defaultdict(list)
-                with open(regions_file_name, newline='') as csv_file:
-                    reader = csv.DictReader(csv_file)
-                    for row in reader:
-                        for k, v in row.items():
-                            regions[k].append(int(v) if 'label' in k or 'bbox' in k else float(v))
-                    for key in regions.keys():
-                        regions[key] = np.asarray(regions[key])
-            else:
-                regions = None
-            patches, labels, regions = extract_patches_from_instances_mask(
+
+            tomo_name = os.path.basename(test_sample['file_name'][0]).split(cfg['file_extension'])[0]
+            current_regions = regions[regions['tomo'] == tomo_name]
+
+            patches, labels, current_regions = extract_patches_from_centers(
                 test_sample['image'][0].cpu().detach().numpy(),
-                mask,
-                regions,
-                cfg['min_particle_size'],
-                cfg['max_particle_size'],
-                cfg['masking_type'],
-                cfg['expand_labels'])
+                current_regions, centers_patch_size)
             print('Extracted patches')
             image_dataset = ArrayDataset(patches, labels=labels, img_transform=patch_transforms)
             embeds = np.zeros([cfg['parameters']['network']['dim']] + [len(patches)])
@@ -210,23 +179,16 @@ def main(config_file_path, filename=None):
             print(f'Saving predictions for file {current_file}')
             with h5py.File(out_file.split(cfg['file_extension'])[0] + '_embeds.h5', 'w') as f:
                 f.create_dataset('embeddings', data=embeds)
-            with h5py.File(out_file.split(cfg['file_extension'])[0] + '_instance_labels.h5', 'w') as f:
+            with h5py.File(out_file.split(cfg['file_extension'])[0] + '_embeds_labels.h5', 'w') as f:
                 f.create_dataset('labels', data=tags)
 
             out_file = out_file.split(cfg['file_extension'])[0]
-            with open(out_file + '_instance_regions.csv', 'w') as f:
-                w = csv.writer(f)
-                w.writerow(list(regions.keys()))
-                for i in range(len(regions['label'])):
-                    w.writerow([regions[l][i] for l in regions.keys()])
-
-            regions = pd.DataFrame(regions)
-            regions.drop(columns=['hull_area'], inplace=True)
-            regions.rename(columns={'centroid-0': 'rlnCoordinateZ', 'centroid-1': 'rlnCoordinateY',
-                                    'centroid-2': 'rlnCoordinateX', 'bbox-0': 'rlnBbox-0', 'bbox-1': 'rlnBbox-1',
-                                    'bbox-2': 'rlnBbox-2', 'bbox-3': 'rlnBbox-3', 'bbox-4': 'rlnBbox-4',
-                                    'bbox-5': 'rlnBbox-5', 'label': 'rlnLabel', 'area': 'rlnArea'}, inplace=True)
-            starfile.write(regions, out_file + '_instance_regions.star',
+            current_regions = pd.DataFrame(current_regions)
+            current_regions.to_csv(out_file + '_instance_regions.csv', index=False)
+            current_regions.rename(columns={'centroid-0': 'rlnCoordinateZ', 'centroid-1': 'rlnCoordinateY',
+                                            'centroid-2': 'rlnCoordinateX', 'label': 'rlnLabel',
+                                            'area': 'rlnArea'}, errors='ignore', inplace=True)
+            starfile.write(current_regions, out_file + '_instance_regions.star',
                            overwrite=True)
 
 

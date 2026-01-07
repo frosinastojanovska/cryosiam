@@ -8,6 +8,8 @@ from cryosiam.apps.dense_simsiam_semantic.prediction_postprocessing import main 
 from cryosiam.apps.dense_simsiam_semantic.semantic_prediction_to_center_points import \
     main as semantic_prediction_to_center_points
 from cryosiam.apps.simsiam_prediction.extract_patches_embeddings import main as extract_patches_embeddings_main
+from cryosiam.apps.simsiam_prediction.extract_patches_embeddings_from_centers import \
+    main as extract_patches_embeddings_from_centers_main
 from cryosiam.apps.simsiam_prediction.embeddings_kmeans_clustering import main as embeddings_kmeans_clustering_main
 from cryosiam.apps.simsiam_prediction.embeddings_spectral_clustering import main as embeddings_spectral_clustering_main
 from cryosiam.apps.simsiam_prediction.visualize_embeddings import main as visualize_embeddings_main
@@ -80,6 +82,15 @@ def main():
     sp_simsiam.add_argument('--filename', type=str, required=False,
                             help='Process only this specific tomogram filename', default=None)
     sp_simsiam.set_defaults(func=lambda args: extract_patches_embeddings_main(args.config_file, args.filename))
+
+    # simsiam_embeddings_from_centers_predict subcommand
+    sp_simsiam = subparsers.add_parser("simsiam_embeddings_from_centers_predict",
+                                       help="Run SimSiam embeddings generation from center points")
+    sp_simsiam.add_argument('--config_file', type=str, required=True, help='Path to the .yaml configuration file')
+    sp_simsiam.add_argument('--filename', type=str, required=False,
+                            help='Process only this specific tomogram filename', default=None)
+    sp_simsiam.set_defaults(func=lambda args: extract_patches_embeddings_from_centers_main(args.config_file,
+                                                                                           args.filename))
 
     # simsiam_embeddings_kmeans_cluster subcommand
     sp_simsiam = subparsers.add_parser("simsiam_embeddings_kmeans_clustering",

@@ -1,5 +1,7 @@
 data_folder: '/scratch/stojanov/mycoplasma_data/vpp/240422/'
 instances_mask_folder: '/scratch/stojanov/mycoplasma_data/vpp/240422/instances'
+centers_file: '/scratch/stojanov/mycoplasma_data/vpp/240422/ribosome_centers.csv'
+centers_patch_size: 64
 log_dir: '/scratch/stojanov/development/cryoet-torch/experiments/simsiam'
 prediction_folder: '/scratch/stojanov/development/cryoet-torch/experiments/simsiam/predictions'
 trained_model: '/g/zaugg/stojanov/simulated_datasets/experiments/simsiam/version_0/model/last.ckpt'
