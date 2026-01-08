@@ -2,6 +2,7 @@ import os
 import umap
 import yaml
 import h5py
+import starfile
 import numpy as np
 import pandas as pd
 import plotly.express as px
