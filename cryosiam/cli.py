@@ -8,6 +8,8 @@ from cryosiam.apps.dense_simsiam_semantic.prediction_postprocessing import main 
 from cryosiam.apps.dense_simsiam_semantic.semantic_prediction_to_center_points import \
     main as semantic_prediction_to_center_points
 from cryosiam.apps.simsiam_prediction.extract_patches_embeddings import main as extract_patches_embeddings_main
+from cryosiam.apps.simsiam_prediction.extract_patches_embeddings_from_centers import \
+    main as extract_patches_embeddings_from_centers_main
 from cryosiam.apps.simsiam_prediction.embeddings_kmeans_clustering import main as embeddings_kmeans_clustering_main
 from cryosiam.apps.simsiam_prediction.embeddings_spectral_clustering import main as embeddings_spectral_clustering_main
 from cryosiam.apps.simsiam_prediction.visualize_embeddings import main as visualize_embeddings_main
@@ -22,6 +24,9 @@ from cryosiam.apps.processing.create_sphere_mask_from_coordinates import \
     main as create_sphere_mask_from_coordinates_main
 from cryosiam.apps.processing.create_sphere_mask_from_coordinates_multiclass import \
     main as create_sphere_mask_from_coordinates_multiclass_main
+from cryosiam.apps.processing.create_binary_map_after_sta import main as create_binary_map_after_sta_main
+from cryosiam.apps.processing.create_multi_class_mask_from_binary_masks import \
+    main as create_multi_class_mask_from_binary_masks_main
 
 __version__ = "1.0"
 
@@ -80,6 +85,15 @@ def main():
     sp_simsiam.add_argument('--filename', type=str, required=False,
                             help='Process only this specific tomogram filename', default=None)
     sp_simsiam.set_defaults(func=lambda args: extract_patches_embeddings_main(args.config_file, args.filename))
+
+    # simsiam_embeddings_from_centers_predict subcommand
+    sp_simsiam = subparsers.add_parser("simsiam_embeddings_from_centers_predict",
+                                       help="Run SimSiam embeddings generation from center points")
+    sp_simsiam.add_argument('--config_file', type=str, required=True, help='Path to the .yaml configuration file')
+    sp_simsiam.add_argument('--filename', type=str, required=False,
+                            help='Process only this specific tomogram filename', default=None)
+    sp_simsiam.set_defaults(func=lambda args: extract_patches_embeddings_from_centers_main(args.config_file,
+                                                                                           args.filename))
 
     # simsiam_embeddings_kmeans_cluster subcommand
     sp_simsiam = subparsers.add_parser("simsiam_embeddings_kmeans_clustering",
@@ -185,6 +199,39 @@ def main():
         func=lambda args: create_sphere_mask_from_coordinates_multiclass_main(args.coordinates_file, args.sphere_radius,
                                                                               args.output_dir, args.tomogram_path,
                                                                               args.tomo_name))
+
+    # Create binary density map mask
+    sp_process = subparsers.add_parser("processing_create_binary_map_after_sta",
+                                       help="Create binary map from given sta average map, canter coordinates and orientations")
+    sp_process.add_argument('--star_file', type=str, required=True,
+                            help='path to star file with orientations after STA')
+    sp_process.add_argument('--map_file', type=str, required=True,
+                            help='path to the map file that will be placed in 3D tomogram (it is expected to be cubic subvolume)')
+    sp_process.add_argument('--output_dir', type=str, required=True,
+                            help='path to folder to save the output tomogram/s')
+    sp_process.add_argument("--map_threshold", type=float, required=True,
+                            help="Threshold for the map to binarize it.")
+    sp_process.add_argument('--example_tomogram', type=str, required=True,
+                            help='path to one tomogram to determine the 3D size of the output')
+    sp_process.add_argument('--tomo_name', type=str, required=False,
+                            help='process only this tomogram, the name should match the rlnMicrographName')
+    sp_process.set_defaults(
+        func=lambda args: create_binary_map_after_sta_main(args.star_file, args.map_file,
+                                                           args.output_dir, args.map_threshold,
+                                                           args.example_tomogram, args.tomo_name))
+
+    # Create multi-class masks from binary masks
+    sp_process = subparsers.add_parser("processing_create_multiclass_from_binary_masks",
+                                       help="Create binary map from given sta average map, canter coordinates and orientations")
+    sp_process.add_argument('--root_binary_masks_folder', type=str, required=True,
+                            help='path to a folder that contains subfolders for every binary label. The subfolders contain the binary masks for every separate label')
+    sp_process.add_argument('--output_dir', type=str, required=True,
+                            help='path to folder to save the output tomogram/s')
+    sp_process.add_argument('--tomo_name', type=str, required=False,
+                            help='process only this tomogram (include the file extension in the name)')
+    sp_process.set_defaults(
+        func=lambda args: create_multi_class_mask_from_binary_masks_main(args.root_binary_masks_folder, args.output_dir,
+                                                                         args.tomo_name))
 
     args = parser.parse_args()
     # Run selected command

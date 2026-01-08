@@ -23,6 +23,7 @@ from monai.transforms import (
     SpatialPadd,
     EnsureTyped,
     RandRotated,
+    RandFlipd,
     Rand3DElasticd,
     RandScaleIntensityd,
     NormalizeIntensityd,
@@ -227,6 +228,18 @@ class SemanticSegmentationModule(pl.LightningModule):
                                     SqueezeDimd(keys=['labels'],
                                                 dim=0) if self.config['parameters']['network']['out_channels'] > 1
                                     else Identityd(keys=['labels']),
+                                    RandFlipd(keys=keys + ['labels', 'distances'], prob=0.8, spatial_axis=-1)
+                                    if 'flip' in self.config['parameters']['transforms'] and
+                                       self.config['parameters']['transforms']['flip'] else
+                                    Identityd(keys=['image']),
+                                    RandFlipd(keys=keys + ['labels', 'distances'], prob=0.8, spatial_axis=-2)
+                                    if 'flip' in self.config['parameters']['transforms'] and
+                                       self.config['parameters']['transforms']['flip'] else
+                                    Identityd(keys=['image']),
+                                    RandFlipd(keys=keys + ['labels', 'distances'], prob=0.8, spatial_axis=-3)
+                                    if 'flip' in self.config['parameters']['transforms'] and
+                                       self.config['parameters']['transforms']['flip'] else
+                                    Identityd(keys=['image']),
                                     RandScaleIntensityd(['image'], prob=0.8,
                                                         factors=self.config['parameters']['transforms'][
                                                             'scale_intensity_factors'])

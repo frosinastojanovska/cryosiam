@@ -16,6 +16,7 @@ eval_skip_prediction: False
 filtering_mask_folder: '/g/zaugg/stojanov/simulated_datasets/final_models/dense_simsiam_instance/predictions/semantic'
 filtering_mask_expand_voxels: 2
 filtering_mask_labels: [1]
+filtering_mask_extension: '.mrc' # it can be .h5 for a mask coming from CryoSiam prediction or .mrc/.rec for any mask in mrc format
 
 parameters:
   gpu_devices: 1

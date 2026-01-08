@@ -150,7 +150,6 @@ def main(config_file_path):
 
     prediction_folder = cfg['prediction_folder']
     prediction_visualization_folder = cfg['visualization']['prediction_folder']
-    instances_folder = cfg['instances_mask_folder']
     os.makedirs(prediction_folder, exist_ok=True)
     os.makedirs(prediction_visualization_folder, exist_ok=True)
     files = cfg['visualization_files']

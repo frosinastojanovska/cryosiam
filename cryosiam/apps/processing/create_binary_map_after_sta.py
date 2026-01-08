@@ -110,7 +110,7 @@ def main(star_file, map_file, output_dir, map_threshold, example_tomogram, tomo_
 
 
 def parser_helper(description=None):
-    description = "Create instance map from given average map and orientations" if description is None else description
+    description = "Create binary map from given average map and orientations" if description is None else description
     parser = argparse.ArgumentParser(description, add_help=True,
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--star_file', type=str, required=True, help='path to star file with orientations after STA')

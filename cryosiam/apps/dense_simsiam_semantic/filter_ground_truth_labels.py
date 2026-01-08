@@ -1,12 +1,11 @@
 import os
 import yaml
 import numpy as np
-import pandas as pd
-from skimage.measure import regionprops_table
 from skimage.segmentation import expand_labels
 
 from cryosiam.utils import parser_helper
 from cryosiam.data import MrcReader, MrcWriter
+
 
 def main(config_file_path):
     with open(config_file_path, "r") as ymlfile:

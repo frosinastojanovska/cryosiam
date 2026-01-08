@@ -30,15 +30,17 @@ def main(config_file_path):
         cfg = yaml.safe_load(ymlfile)
 
     files = [file for file in os.listdir(cfg['prediction_folder']) if file.endswith('.h5')]
-    labels = {i + 1: [] for i in range(cfg['parameters']['network']['out_channels'])}
 
+    classes_range = cfg['parameters']['network']['out_channels'] if cfg['parameters']['network'][
+                                                                        'out_channels'] > 1 else 2
+    labels = {i: [] for i in range(1, classes_range)}
     if 'min_voxels' in cfg['parameters']['network']:
         min_voxels = cfg['parameters']['network']['min_voxels']
+        if not isinstance(min_voxels, list):
+            min_voxels = [min_voxels] * classes_range
     else:
-        min_voxels = 100
-
-    for i in range(cfg['parameters']['network']['out_channels']):
-        label_id = i + 1
+        min_voxels = [100] * classes_range
+    for label_id in range(1, classes_range):
         for file in files:
             basename = os.path.basename(file).split('_preds.h5')[0]
             print('Processing {}'.format(basename))
@@ -47,7 +49,7 @@ def main(config_file_path):
             instances = label(binary_erosion(data == label_id))
             regions = regionprops_table(instances, properties=['label', 'area', 'centroid'])
             regions = pd.DataFrame(regions)
-            regions = regions[regions['area'] > min_voxels]
+            regions = regions[regions['area'] > min_voxels[label_id - 1]]
             regions['tomo'] = basename
             labels[label_id].append(regions)
 

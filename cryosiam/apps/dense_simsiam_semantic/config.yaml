@@ -8,12 +8,12 @@ prediction_folder: '/g/zaugg/stojanov/simulated_datasets/final_models/dense_sims
 pretrained_model: '/g/zaugg/stojanov/simulated_datasets/experiments/dense_simsiam/version_1/model/last.ckpt'
 file_extension: '.mrc'
 
-train_files: ['sample_1.mrc', 'sample_2.mrc', 'sample_3.mrc', 'sample_4.mrc', 'sample_5.mrc',
-              'sample_6.mrc', 'sample_7.mrc', 'sample_8.mrc', 'sample_9.mrc', 'sample_10.mrc',
-              'sample_11.mrc', 'sample_12.mrc', 'sample_13.mrc', 'sample_14.mrc', 'sample_15.mrc',
-              'sample_16.mrc', 'sample_17.mrc', 'sample_18.mrc', 'sample_19.mrc', 'sample_20.mrc',
-              'sample_21.mrc', 'sample_22.mrc', 'sample_23.mrc', 'sample_24.mrc', 'sample_25.mrc',
-              'sample_26.mrc', 'sample_27.mrc', 'sample_28.mrc', 'sample_29.mrc', 'sample_30.mrc']
+train_files: [ 'sample_1.mrc', 'sample_2.mrc', 'sample_3.mrc', 'sample_4.mrc', 'sample_5.mrc',
+               'sample_6.mrc', 'sample_7.mrc', 'sample_8.mrc', 'sample_9.mrc', 'sample_10.mrc',
+               'sample_11.mrc', 'sample_12.mrc', 'sample_13.mrc', 'sample_14.mrc', 'sample_15.mrc',
+               'sample_16.mrc', 'sample_17.mrc', 'sample_18.mrc', 'sample_19.mrc', 'sample_20.mrc',
+               'sample_21.mrc', 'sample_22.mrc', 'sample_23.mrc', 'sample_24.mrc', 'sample_25.mrc',
+               'sample_26.mrc', 'sample_27.mrc', 'sample_28.mrc', 'sample_29.mrc', 'sample_30.mrc' ]
 
 test_files: null
 
@@ -21,6 +21,9 @@ val_files: null
 validation_ratio: 0.1
 
 continue_training: False
+
+labels_folder_for_filtering: null
+selected_labels: null
 
 parameters:
   nodes: 1
@@ -32,18 +35,19 @@ parameters:
     min: 0
     max: 1
     mean: 0
-    std:  1
+    std: 1
   transforms:
     low_pass_sigma_range: [ 0.5, 2 ]
     high_pass_sigma_range: [ 0.1, 0.5 ]
     high_pass_sigma2_range: [ 4, 5 ]
     noise_sigma_range: [ 0.1, 0.5 ]
-    combine_transforms: True
+    combine_transforms: False
     use_noisy_input: False
     scale_intensity_factors: null
-    elastic: [5, 10]
-    zoom: [0.8, 1.2]
-    rotate: [3.14, 3.14, 3.14]
+    elastic: [ 5, 10 ]
+    zoom: [ 0.8, 1.2 ]
+    rotate: [ 3.14, 3.14, 3.14 ]
+    flip: True
   network:
     in_channels: 1
     spatial_dims: 3
