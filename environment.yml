@@ -24,6 +24,7 @@ dependencies:
   - starfile
   - scikit-image
   - pip
+  - setuptools<81
   - pip:
       - edt
       - umap-learn
