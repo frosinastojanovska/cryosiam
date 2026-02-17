@@ -1,15 +1,9 @@
 import os
 import h5py
 import yaml
-import mrcfile
 import argparse
 import starfile
-import numpy as np
 import pandas as pd
-from scipy import ndimage as ndi
-from skimage.filters import gaussian
-from skimage.segmentation import watershed
-from skimage.feature import peak_local_max
 from skimage.measure import regionprops_table, label
 from skimage.morphology import binary_erosion
 

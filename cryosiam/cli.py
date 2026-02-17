@@ -27,6 +27,7 @@ from cryosiam.apps.processing.create_sphere_mask_from_coordinates_multiclass imp
 from cryosiam.apps.processing.create_binary_map_after_sta import main as create_binary_map_after_sta_main
 from cryosiam.apps.processing.create_multi_class_mask_from_binary_masks import \
     main as create_multi_class_mask_from_binary_masks_main
+from cryosiam.apps.processing.h5_to_mrc import main as h5_to_mrc
 
 __version__ = "1.0"
 
@@ -232,6 +233,15 @@ def main():
     sp_process.set_defaults(
         func=lambda args: create_multi_class_mask_from_binary_masks_main(args.root_binary_masks_folder, args.output_dir,
                                                                          args.tomo_name))
+
+    # H5 to MRC file
+    sp_process = subparsers.add_parser("h5_to_mrc",
+                                       help="Convert h5 file/s into mrc file/s")
+    sp_process.add_argument('--input_path', type=str, required=True, help='path to the input h5 file or '
+                                                                          'path to the folder with input h5 file/s')
+    sp_process.add_argument('--output_path', type=str, required=True, help='path to save the output mrc file or '
+                                                                           'path to folder to save the output mrc file/s')
+    sp_process.set_defaults(func=lambda args: h5_to_mrc(args.input_path, args.output_path))
 
     args = parser.parse_args()
     # Run selected command
