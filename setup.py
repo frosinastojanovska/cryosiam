@@ -9,6 +9,7 @@ setup(
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/frosinastojanovska/cryosiam",
+    license="GPL-3.0-only",
     packages=find_packages(),
     entry_points={
         "console_scripts": [
@@ -27,9 +28,9 @@ setup(
         "scipy",
         "plotly",
         "PyYAML",
-        "scikit_learn",
+        "scikit-learn",
         "scikit-image",
-        "torch",
+        "torch>=2.1.0",
         "torchvision",
         "starfile",
         "umap-learn"
@@ -37,7 +38,6 @@ setup(
     python_requires=">=3.8",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
 )

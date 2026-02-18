@@ -28,7 +28,7 @@ def read_star_file(star_file):
     data = starfile.read(star_file)
     if type(data) == dict:
         data = data['particles']
-    return data[['rlnCoordinateZ', 'rlnCoordinateY', 'rlnCoordinateX']]
+    return data
 
 
 def main(coordinates_file, sphere_radius, output_dir, tomogram_path, tomo_name):

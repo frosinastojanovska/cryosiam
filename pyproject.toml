@@ -8,28 +8,28 @@ version = "1.0"
 description = "CryoSiam: Deep Learning-based Cryo-ET Analysis"
 readme = "README.md"
 requires-python = ">=3.8"
-license = { text = "MIT" }
+license = { text = "GPL-3.0-only" }
 authors = [
-  { name = "Frosina Stojanovska", email = "stojanovska.frose@gmail.com" }
+    { name = "Frosina Stojanovska", email = "stojanovska.frose@gmail.com" }
 ]
 dependencies = [
-  "edt==2.4.1",
-  "elf==0.5.2",
-  "h5py==3.11.0",
-  "itk==5.3.0",
-  "lightning==2.1.3",
-  "monai==1.3.2",
-  "mrcfile==1.5.3",
-  "numpy==1.24.4",
-  "pandas==2.0.3",
-  "scipy==1.9.1",
-  "plotly==5.24.1",
-  "PyYAML==6.0.2",
-  "scikit_learn==1.3.2",
-  "scikit-image==0.20.0",
-  "torch==2.1.2",
-  "torchvision==0.16.2",
-  "umap-learn==0.5.7"
+    "edt",
+    "h5py",
+    "itk",
+    "lightning",
+    "monai>=1.3.1",
+    "mrcfile",
+    "numpy",
+    "pandas",
+    "scipy",
+    "plotly",
+    "PyYAML",
+    "scikit_learn",
+    "scikit-image",
+    "torch>=2.1.0",
+    "torchvision",
+    "starfile",
+    "umap-learn"
 ]
 
 [project.scripts]

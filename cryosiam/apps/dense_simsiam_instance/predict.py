@@ -27,6 +27,12 @@ from cryosiam.apps.dense_simsiam_instance import load_backbone_model, load_predi
 
 
 def main(config_file_path, filename=None):
+    if not torch.cuda.is_available():
+        print('CUDA not available, using CPU instead.')
+        device = 'cpu'
+    else:
+        device = 'cuda:0'
+
     with open(config_file_path, "r") as ymlfile:
         cfg = yaml.safe_load(ymlfile)
 
@@ -34,8 +40,8 @@ def main(config_file_path, filename=None):
         checkpoint_path = cfg['trained_model']
     else:
         checkpoint_path = os.path.join(cfg['log_dir'], 'model', 'model_best.ckpt')
-    backbone = load_backbone_model(checkpoint_path)
-    prediction_model = load_prediction_model(checkpoint_path)
+    backbone = load_backbone_model(checkpoint_path, device)
+    prediction_model = load_prediction_model(checkpoint_path, device)
 
     checkpoint = torch.load(checkpoint_path, weights_only=False)
     net_config = checkpoint['hyper_parameters']['config']
@@ -101,7 +107,10 @@ def main(config_file_path, filename=None):
                 loader = DataLoader(patch_dataset, batch_size=cfg['hyper_parameters']['batch_size'], num_workers=2)
                 for item in loader:
                     img, coord = item[0], item[1].numpy().astype(int)
-                    z, _ = backbone.forward_predict(img.cuda())
+                    if device == 'cuda:0':
+                        z, _ = backbone.forward_predict(img.cuda())
+                    else:
+                        z, _ = backbone.forward_predict(img)
                     foreground_pred, distance_pred, boundaries_pred = prediction_model(z)
                     foreground_pred = Sigmoid()(foreground_pred)
                     boundaries_pred = Sigmoid()(boundaries_pred)

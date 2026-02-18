@@ -28,12 +28,12 @@ def read_star_file(star_file):
     data = starfile.read(star_file)
     if type(data) == dict:
         data = data['particles']
-    return data[['rlnCoordinateZ', 'rlnCoordinateY', 'rlnCoordinateX']]
+    return data
 
 
 def main(coordinates_file, sphere_radiuses, output_dir, tomogram_path, tomo_name):
     os.makedirs(output_dir, exist_ok=True)
-    if coordinates_file.endswith('.mrc'):
+    if coordinates_file.endswith('.star'):
         data = read_star_file(coordinates_file)
         file_type = 0
     else:

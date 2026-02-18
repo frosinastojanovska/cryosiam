@@ -12,6 +12,12 @@ from cryosiam.apps.dense_simsiam_semantic import SemanticSegmentationModule
 
 
 def main(config_file_path):
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "CryoSiam requires a CUDA-enabled PyTorch for training."
+            "Please install PyTorch with CUDA support."
+        )
+
     with open(config_file_path, "r") as ymlfile:
         cfg = yaml.safe_load(ymlfile)
 

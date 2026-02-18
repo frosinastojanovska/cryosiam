@@ -27,37 +27,7 @@ from monai.transforms import (
 
 from cryosiam.data import MrcReader
 from cryosiam.utils import parser_helper
-from cryosiam.networks.nets import SimSiam
-
-
-def load_prediction_model(checkpoint_path, contrastive=False, device="cuda:0"):
-    """Load SimSiam trained model from given checkpoint
-    :param checkpoint_path: path to the checkpoint
-    :type checkpoint_path: str
-    :param device: on which device should the model be loaded, default is cuda:0
-    :type device: str
-    :return: SimSiam model with laoded trained weights
-    :rtype: cryoet_torch.networks.nets.SimSiam
-    """
-    checkpoint = torch.load(checkpoint_path, weights_only=False)
-    config = checkpoint['hyper_parameters']['backbone_config' if contrastive else 'config']
-    model = SimSiam(block_type=config['parameters']['network']['block_type'],
-                    n_input_channels=config['parameters']['network']['in_channels'],
-                    spatial_dims=config['parameters']['network']['spatial_dims'],
-                    num_layers=config['parameters']['network']['num_layers'],
-                    num_filters=config['parameters']['network']['num_filters'],
-                    no_max_pool=config['parameters']['network']['no_max_pool'],
-                    dim=config['parameters']['network']['dim'],
-                    pred_dim=config['parameters']['network']['pred_dim'])
-    new_state_dict = collections.OrderedDict()
-    for k, v in checkpoint['state_dict'].items():
-        name = k.replace("_model.", '')  # remove `_model.`
-        new_state_dict[name] = v
-    model.load_state_dict(new_state_dict)
-    model.eval()
-    device = torch.device(device)
-    model.to(device)
-    return model
+from cryosiam.apps.simsiam_prediction import load_prediction_model
 
 
 def extract_patches_from_instances_mask(image, instances_mask, regions=None, min_particle_size=None,
@@ -94,6 +64,12 @@ def extract_patches_from_instances_mask(image, instances_mask, regions=None, min
 
 
 def main(config_file_path, filename=None):
+    if not torch.cuda.is_available():
+        print('CUDA not available, using CPU instead.')
+        device = 'cpu'
+    else:
+        device = 'cuda:0'
+
     with open(config_file_path, "r") as ymlfile:
         cfg = yaml.safe_load(ymlfile)
 
@@ -103,9 +79,9 @@ def main(config_file_path, filename=None):
         checkpoint_path = os.path.join(cfg['log_dir'], 'model', 'last.ckpt')
 
     if 'contrastive' in cfg and cfg['contrastive']:
-        net = load_prediction_model(checkpoint_path, contrastive=True)
+        net = load_prediction_model(checkpoint_path, contrastive=True, device=device)
     else:
-        net = load_prediction_model(checkpoint_path, contrastive=False)
+        net = load_prediction_model(checkpoint_path, contrastive=False, device=device)
 
     test_folder = cfg['data_folder']
     instances_mask_folder = cfg['instances_mask_folder']
@@ -196,9 +172,15 @@ def main(config_file_path, filename=None):
             for item in loader:
                 img, label = item[0], item[1]
                 if 'contrastive' in cfg and cfg['contrastive']:
-                    _, out = net.forward_one(img.cuda())
+                    if device == 'cuda:0':
+                        _, out = net.forward_one(img.cuda())
+                    else:
+                        _, out = net.forward_one(img)
                 else:
-                    out = net.encoder(img.cuda())
+                    if device == 'cuda:0':
+                        out = net.encoder(img.cuda())
+                    else:
+                        out = net.encoder(img)
                 embed = post_pred(out)
                 for batch_i in range(label.shape[0]):
                     l_batch = label[batch_i]

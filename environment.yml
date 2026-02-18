@@ -11,7 +11,7 @@ dependencies:
   - scipy
   - h5py
   - scikit-learn
-  - pytorch
+  - pytorch>=2.1.0
   - torchvision
   - pytorch-cuda
   - itk
