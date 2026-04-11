@@ -32,11 +32,11 @@ def extract_patches_from_centers(image, regions, box_size):
     filtered_regions = {key: [] for key in regions.keys()}
     for i in range(len(regions['label'])):
         labels.append(regions['label'][i])
-        slices = (slice(min(int(regions['centroid-0'][i]) - box_size, 0),
+        slices = (slice(max(int(regions['centroid-0'][i]) - box_size, 0),
                         min(int(regions['centroid-0'][i]) + box_size, max_z)),
-                  slice(min(int(regions['centroid-1'][i]) - box_size, 0),
+                  slice(max(int(regions['centroid-1'][i]) - box_size, 0),
                         min(int(regions['centroid-1'][i]) + box_size, max_y)),
-                  slice(min(int(regions['centroid-2'][i]) - box_size, 0),
+                  slice(max(int(regions['centroid-2'][i]) - box_size, 0),
                         min(int(regions['centroid-2'][i]) + box_size, max_x)))
         patch = image[slices].copy()
         patches.append(patch)
