@@ -13,6 +13,7 @@ dependencies:
   - scikit-learn
   - pytorch>=2.1.0
   - torchvision
+  - faiss-gpu
   - pytorch-cuda
   - itk
   - pyyaml

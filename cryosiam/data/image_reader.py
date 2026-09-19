@@ -83,7 +83,12 @@ class MrcReader(ImageReader):
         for i in ensure_tuple(img):
             header = i.header
             header = {name: header[name] for name in header.dtype.names if name in important_info}
-            header['voxel_size'] = np.asarray((img.voxel_size['x'], img.voxel_size['y'], img.voxel_size['z']))
+            if img.header.mx == 0 or img.header.my == 0 or img.header.mz == 0:
+                header['voxel_size'] = np.asarray((1.0, 1.0, 1.0))
+            else:
+                header['voxel_size'] = np.asarray((img.voxel_size['x'],
+                                                   img.voxel_size['y'],
+                                                   img.voxel_size['z']))
             data = i.data[:]
             if self.writable:
                 data.setflags(write=True)

@@ -5,3 +5,4 @@ from .bifpn_decoder import BiFPNDecoder
 from .dense_simsiam import DenseSimSiam
 from .instance_heads import InstanceHeads
 from .semantic_heads import SemanticHeads
+from .similarity_fpn import PrototypeSimilarityFPN

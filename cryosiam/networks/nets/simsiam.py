@@ -88,6 +88,9 @@ class SimSiam(nn.Module):
         outputs.append(x)  # res5
 
         x_pooled = self.encoder.avgpool(x)
+
         x_pooled = x_pooled.view(x_pooled.size(0), -1)
+        if self.encoder.fc is not None:
+            x_pooled = self.encoder.fc(x_pooled)
 
         return outputs, x_pooled

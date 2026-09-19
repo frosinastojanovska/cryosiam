@@ -94,6 +94,57 @@ class InvertIntensity(Transform):
         return out
 
 
+class RandomAmplitudeSpectrum(RandomizableTransform):
+    backend = [TransformBackends.TORCH, TransformBackends.NUMPY]
+
+    def __init__(self, n_bands: int, sigma: float = 0.2, prob: float = 0.1) -> None:
+        RandomizableTransform.__init__(self, prob)
+        self.n_bands = n_bands
+        self.sigma = sigma
+        self.prob = prob
+        self.sequence = np.ones(n_bands, dtype=np.float64)
+
+    def randomize(self, data: Optional[Any] = None) -> None:
+        super().randomize(None)
+        if not self._do_transform:
+            return None
+        x = np.ones(self.n_bands, dtype=np.float64)
+        for i in range(1, self.n_bands):
+            x[i] = abs(x[i - 1] + self.R.normal(0, self.sigma))
+        self.sequence = x
+
+    def __call__(self, img: NdarrayOrTensor, randomize: bool = True) -> NdarrayOrTensor:
+        """
+        Apply the transform to `img`.
+        """
+        img = convert_to_tensor(img, track_meta=get_track_meta())
+        if randomize:
+            self.randomize()
+        if not self._do_transform:
+            return img
+
+        img_t, *_ = convert_data_type(img, torch.Tensor, dtype=torch.float)
+        img_t = torch.squeeze(img_t, 0)
+        volume = img_t.numpy()
+
+        fft = np.fft.fftshift(np.fft.fftn(volume))
+        amplitude = np.abs(fft)
+        phase = np.angle(fft)
+
+        zz, yy, xx = np.indices(volume.shape)
+        center = np.array(volume.shape) // 2
+        radius = np.sqrt((zz - center[0]) ** 2 + (yy - center[1]) ** 2 + (xx - center[2]) ** 2)
+        radius = np.clip(radius.astype(np.int32), 0, self.n_bands - 1)
+
+        scale_map = self.sequence[radius]
+        perturbed_fft = amplitude * scale_map * np.exp(1j * phase)
+        perturbed = np.real(np.fft.ifftn(np.fft.ifftshift(perturbed_fft))).astype(np.float32)
+
+        out_t = torch.from_numpy(perturbed).unsqueeze(0)
+        out, *_ = convert_to_dst_type(out_t, dst=img, dtype=out_t.dtype)
+        return out
+
+
 class RandomSharpen(RandomizableTransform):
     """
     Implement high pass filtering on an image.

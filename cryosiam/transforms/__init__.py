@@ -4,9 +4,12 @@ from .dictionary import (
     ClipIntensityd,
     ScaleIntensityd,
     InvertIntensityd,
+    RandMaskFocusBlurd,
     RandomLowPassBlurd,
     RandomGaussianNoised,
-    RandomHighPassSharpend
+    RandomHighPassSharpend,
+    AdaptiveFrequencyAugmentd,
+    RandomAmplitudeSpectrumd
 )
 from .array import (
     NumpyToTensor,
@@ -16,5 +19,6 @@ from .array import (
     InvertIntensity,
     RandomLowPassBlur,
     RandomGaussianNoise,
-    RandomHighPassSharpen
+    RandomHighPassSharpen,
+    RandomAmplitudeSpectrum
 )

@@ -2,11 +2,18 @@ data_folder: '/scratch/stojanov/mycoplasma_data/vpp/240422/'
 instances_mask_folder: '/scratch/stojanov/mycoplasma_data/vpp/240422/instances'
 centers_file: '/scratch/stojanov/mycoplasma_data/vpp/240422/ribosome_centers.csv'
 centers_patch_size: 64
+
 log_dir: '/scratch/stojanov/development/cryoet-torch/experiments/simsiam'
 prediction_folder: '/scratch/stojanov/development/cryoet-torch/experiments/simsiam/predictions'
+
 trained_model: '/g/zaugg/stojanov/simulated_datasets/experiments/simsiam/version_0/model/last.ckpt'
 contrastive: True
 file_extension: '.mrc'
+
+
+orientations_file: '/path/to/oriented_particles.star'
+clustering_method: 'spectral'
+reference_map: null
 
 test_files: null
 clustering_files: null
@@ -26,7 +33,6 @@ clustering_spectral:
   estimate_num_clusters: False
   visualization: True
 
-# Visualization parameters
 visualization:
   prediction_folder: '/g/zaugg/stojanov/simulated_datasets/experiments/cryosiam_dna_filaments/predictions/simsiam_1_4/kmeans'
   pca_components: null
@@ -37,12 +43,13 @@ visualization:
 parameters:
   gpu_devices: 0
   data:
-    patch_size: [ 64, 64, 64 ]
+    patch_size: [64, 64, 64]
     patch_overlap: null
     min: 0
     max: 1
     mean: 0
     std: 1
+
   network:
     spatial_dims: 3
     in_channels: 1

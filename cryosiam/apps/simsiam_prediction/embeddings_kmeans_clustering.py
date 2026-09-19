@@ -130,7 +130,7 @@ def main(config_file_path):
         cfg = yaml.safe_load(ymlfile)
 
     prediction_folder = cfg['prediction_folder']
-    files = cfg['clustering_files']
+    files = cfg.get('clustering_files', None)
     if files is None:
         files = [x.split('_embeds.h5')[0] for x in os.listdir(prediction_folder) if
                  '_embeds.h5' in x and os.path.isfile(os.path.join(prediction_folder, x))]
@@ -167,6 +167,7 @@ def main(config_file_path):
 
     i = 0
     labels = []
+    all_dfs = []
     for ind, file in enumerate(files):
         filename = file.split(cfg['file_extension'])[0]
         n = num_samples[ind]
@@ -189,6 +190,20 @@ def main(config_file_path):
                                   'label': 'rlnLabel', 'area': 'rlnArea', 'semantic_class': 'rlnClass'})
         starfile.write(data, os.path.join(prediction_folder, f'{filename}_instance_regions_kmeans_clustered.star'),
                        overwrite=True)
+        all_dfs.append(data)
+
+    # save global combined files
+    combined = pd.concat(all_dfs, ignore_index=True)
+    combined.to_csv(
+        os.path.join(prediction_folder, 'all_instance_regions_kmeans_clustered.csv'),
+        index=False
+    )
+    starfile.write(
+        combined,
+        os.path.join(prediction_folder, 'all_instance_regions_kmeans_clustered.star'),
+        overwrite=True
+    )
+    print(f'Saved global CSV and STAR with {len(combined)} particles')
 
     if cfg['clustering_kmeans']['visualization']:
         file = os.path.join(prediction_folder, f'kmeans_clusters.html')

@@ -1,0 +1,40 @@
+data_folder: '/g/zaugg/stojanov/simulated_datasets/final_models/dense_simsiam_regression/version_6/predictions/'
+log_dir: '/g/zaugg/stojanov/simulated_datasets/new_models/open_vocabulary_segmentation'
+prediction_folder: '/g/zaugg/stojanov/simulated_datasets/new_models/open_vocabulary_segmentation/version_0_c3/predictions'
+trained_model: '/g/zaugg/stojanov/simulated_datasets/new_models/open_vocabulary_segmentation/version_0_c3/model/model_best.ckpt'
+file_extension: '.mrc'
+
+test_files: [ 'sample_1.mrc' ]
+pca_method: 'umap'
+
+save_predictions: True
+reuse_predictions: False
+
+# single value for all classes
+dist_threshold: 3.0
+
+## or per-class
+#dist_threshold:
+#  ribosome: 5.0
+#  membrane: 2.0
+#  atp_synthase: 4.0
+
+reference_file: '/g/zaugg/stojanov/simulated_datasets/new_models/open_vocabulary_segmentation/pdb_mrc_templates/ribo_4ujd_class_148_density_map.mrc'
+parameters:
+  gpu_devices: 0
+  data:
+    patch_size: [ 96, 96, 96 ]
+    patch_overlap: null
+    min: 0
+    max: 1
+    mean: 0
+    std: 1
+  network:
+    spatial_dims: 3
+    in_channels: 1
+    dim: 1024
+  transforms:
+    low_pass_map_sigma: 0.5
+
+hyper_parameters:
+  batch_size: 2

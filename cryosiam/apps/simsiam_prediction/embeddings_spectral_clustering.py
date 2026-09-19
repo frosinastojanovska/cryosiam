@@ -227,6 +227,7 @@ def main(config_file_path):
 
     i = 0
     labels = []
+    all_dfs = []
     for ind, file in enumerate(files):
         filename = file.split(cfg['file_extension'])[0]
         n = num_samples[ind]
@@ -242,13 +243,27 @@ def main(config_file_path):
         df['semantic_class'] = predicted_labels
         df.to_csv(os.path.join(prediction_folder, f'{filename}_instance_regions_spectral_clustered.csv'), index=False)
         labels += [f'{filename}{cfg["file_extension"]}_{x}' for x in df['label']]
-        df.rename(columns={'centroid-0': 'rlnCoordinateZ', 'centroid-1': 'rlnCoordinateY',
-                           'centroid-2': 'rlnCoordinateX', 'tomo': 'rlnMicrographName',
-                           'bbox-0': 'rlnBbox-0', 'bbox-1': 'rlnBbox-1', 'bbox-2': 'rlnBbox-2',
-                           'bbox-3': 'rlnBbox-3', 'bbox-4': 'rlnBbox-4', 'bbox-5': 'rlnBbox-5',
-                           'label': 'rlnLabel', 'area': 'rlnArea', 'semantic_class': 'rlnClass'}, inplace=True)
-        starfile.write(df, os.path.join(prediction_folder, f'{filename}_instance_regions_kmeans_clustered.star'),
+        data = df.rename(columns={'centroid-0': 'rlnCoordinateZ', 'centroid-1': 'rlnCoordinateY',
+                                  'centroid-2': 'rlnCoordinateX', 'tomo': 'rlnMicrographName',
+                                  'bbox-0': 'rlnBbox-0', 'bbox-1': 'rlnBbox-1', 'bbox-2': 'rlnBbox-2',
+                                  'bbox-3': 'rlnBbox-3', 'bbox-4': 'rlnBbox-4', 'bbox-5': 'rlnBbox-5',
+                                  'label': 'rlnLabel', 'area': 'rlnArea', 'semantic_class': 'rlnClass'})
+        starfile.write(data, os.path.join(prediction_folder, f'{filename}_instance_regions_spectral_clustered.star'),
                        overwrite=True)
+        all_dfs.append(data)
+
+    # save global combined files
+    combined = pd.concat(all_dfs, ignore_index=True)
+    combined.to_csv(
+        os.path.join(prediction_folder, 'all_instance_regions_spectral_clustered.csv'),
+        index=False
+    )
+    starfile.write(
+        combined,
+        os.path.join(prediction_folder, 'all_instance_regions_spectral_clustered.star'),
+        overwrite=True
+    )
+    print(f'Saved global CSV and STAR with {len(combined)} particles')
 
     if cfg['clustering_spectral']['visualization']:
         file = os.path.join(prediction_folder, f'spectral_clusters.html')

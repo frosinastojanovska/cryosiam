@@ -36,6 +36,8 @@ parameters:
     max: 1
     mean: 0
     std: 1
+    use_distances: True
+    use_skeletons: True
   transforms:
     low_pass_sigma_range: [ 0.5, 2 ]
     high_pass_sigma_range: [ 0.1, 0.5 ]
@@ -44,7 +46,6 @@ parameters:
     combine_transforms: False
     use_noisy_input: False
     scale_intensity_factors: null
-    elastic: [ 5, 10 ]
     zoom: [ 0.8, 1.2 ]
     rotate: [ 3.14, 3.14, 3.14 ]
     flip: True
@@ -57,6 +58,8 @@ parameters:
     kernel_size: 3
     padding: 1
     distance_prediction: True
+    use_skeleton_loss: true
+    skeleton_loss_weight: 1.0
     use_dice_loss: True
     unfreeze_decoder: True
     unfreeze_backbone: True

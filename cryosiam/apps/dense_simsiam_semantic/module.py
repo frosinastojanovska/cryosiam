@@ -2,6 +2,7 @@ import os
 import random
 import pickle
 import collections
+from functools import partial
 
 import torch
 import torch.nn as nn
@@ -24,7 +25,6 @@ from monai.transforms import (
     EnsureTyped,
     RandRotated,
     RandFlipd,
-    Rand3DElasticd,
     RandScaleIntensityd,
     NormalizeIntensityd,
     EnsureChannelFirstd,
@@ -34,11 +34,10 @@ from monai.transforms import (
 from cryosiam.data import MrcReader
 from cryosiam.data.utils import list_data_collate
 from cryosiam.utils import supervised_semantic_train_val_split
-from cryosiam.networks.nets import (
-    DenseSimSiam,
-    SemanticHeads
-)
-from cryosiam.transforms import ClipIntensityd, RandomLowPassBlurd, RandomGaussianNoised, RandomHighPassSharpend
+from cryosiam.networks.nets import DenseSimSiam, SemanticHeads
+from cryosiam.losses import SoftSkeletonRecallLoss
+from cryosiam.transforms import ClipIntensityd, RandomLowPassBlurd, RandomGaussianNoised, RandomHighPassSharpend, \
+    RandomAmplitudeSpectrumd
 
 
 class SemanticSegmentationModule(pl.LightningModule):
@@ -88,15 +87,25 @@ class SemanticSegmentationModule(pl.LightningModule):
                                     padding=config['parameters']['network']['padding'])
 
         self.batch_size = self.config['hyper_parameters']['batch_size']
+        self.out_channels = config['parameters']['network']['out_channels']
 
-        self.semantic_loss_function = nn.BCEWithLogitsLoss() if config['parameters']['network'][
-                                                                    'out_channels'] == 1 else nn.CrossEntropyLoss()
+        self.use_distances = config['parameters']['network'].get('distance_prediction', False)
+        self.use_skeletons = config['parameters']['network'].get('use_skeleton_loss', False)
+        self.skeleton_weight = config['parameters']['network'].get('skeleton_loss_weight', 1.0)
+
+        self.semantic_loss_function = nn.BCEWithLogitsLoss() if self.out_channels == 1 else nn.CrossEntropyLoss()
 
         self.semantic_loss_function2 = GeneralizedDiceLoss(include_background=True, to_onehot_y=True,
-                                                           sigmoid=config['parameters']['network']['out_channels'] == 1,
-                                                           softmax=config['parameters']['network']['out_channels'] > 1,
+                                                           sigmoid=self.out_channels == 1,
+                                                           softmax=self.out_channels > 1,
                                                            reduction='mean')
         self.distance_loss_function = nn.MSELoss()
+
+        if self.use_skeletons:
+            self.skeleton_loss_function = SoftSkeletonRecallLoss(
+                apply_nonlin=partial(torch.softmax, dim=1) if self.out_channels > 1 else torch.sigmoid,
+                batch_dice=True,
+                class_weights=config['parameters']['network'].get('skeleton_class_weights', None))
 
         self.spatial_dims = self.config['parameters']['network']['spatial_dims']
         self.optimizer_name = self.config['hyper_parameters']['optimizer']
@@ -133,7 +142,9 @@ class SemanticSegmentationModule(pl.LightningModule):
                                                                          ratio=self.config['validation_ratio'],
                                                                          val_files=self.config['val_files'],
                                                                          patches_folder=self.config['patches_folder'],
-                                                                         file_ext=self.config['file_extension'])
+                                                                         file_ext=self.config['file_extension'],
+                                                                         use_distances=self.use_distances,
+                                                                         use_skeletons=self.use_skeletons)
             with open(train_val_path, 'wb') as f:
                 pickle.dump({'train_files': train_files, 'val_files': val_files}, f)
 
@@ -167,6 +178,13 @@ class SemanticSegmentationModule(pl.LightningModule):
         else:
             keys = ['image']
 
+        npz_keys = (['distances'] if self.use_distances else []) + (['skeletons'] if self.use_skeletons else [])
+        spatial_keys = keys + ['labels'] + npz_keys
+        zoom_mode = ['area'] * len(keys) + ['nearest'] + \
+                    ['area' if k == 'distances' else 'nearest' for k in npz_keys]
+        rotate_mode = ['bilinear'] * len(keys) + ['nearest'] + \
+                      ['bilinear' if k == 'distances' else 'nearest' for k in npz_keys]
+
         image_transforms = [
             RandomLowPassBlurd(keys=['image'], prob=1.0,
                                sigma=self.config['parameters']['transforms']['low_pass_sigma_range']) if
@@ -187,37 +205,38 @@ class SemanticSegmentationModule(pl.LightningModule):
                 RandomGaussianNoised(keys=['image'], prob=1.0,
                                      sigma=self.config['parameters']['transforms']['noise_sigma_range'])
             ]) if self.config['parameters']['transforms']['combine_transforms'] else None,
+            RandomAmplitudeSpectrumd(keys=['image'], prob=1.0,
+                                     n_bands=self.config['parameters']['data']['patch_size'][0] // 2,
+                                     sigma=self.config['parameters']['transforms']['spectrum_sigma'])
+            if self.config['parameters']['transforms'].get('spectrum_sigma', None) else None,
             Identityd(keys=['image'])]
 
         image_transforms = [x for x in image_transforms if x is not None]
 
         # define the data transforms
         train_transforms = Compose([LoadImaged(keys=keys + ['labels'], reader=MrcReader(writable=False)),
-                                    LoadImaged(keys=['distances'],
-                                               reader=NumpyReader(npz_keys='data', channel_dim=0)),
+                                    LoadImaged(keys=npz_keys,
+                                               reader=NumpyReader(npz_keys='data', channel_dim=0))
+                                    if npz_keys else Identityd(keys=['image']),
                                     EnsureChannelFirstd(keys=keys + ['labels'], channel_dim='no_channel'),
-                                    ClipIntensityd(keys=['distances'], a_min=-5, a_max=5),
+                                    ClipIntensityd(keys=['distances'], a_min=-5, a_max=5)
+                                    if self.use_distances else Identityd(keys=['image']),
                                     ScaleIntensityRanged(keys=['distances'], a_min=-5, a_max=5,
-                                                         b_min=-1, b_max=1, clip=True),
+                                                         b_min=-1, b_max=1, clip=True)
+                                    if self.use_distances else Identityd(keys=['image']),
                                     ScaleIntensityRanged(keys, a_min=self.config['parameters']['data']['min'],
                                                          a_max=self.config['parameters']['data']['max'], b_min=0,
                                                          b_max=1, clip=True),
-                                    SpatialPadd(keys=keys + ['labels', 'distances'],
+                                    SpatialPadd(keys=spatial_keys,
                                                 spatial_size=self.config['parameters']['data']['patch_size']),
                                     OneOf(transforms=image_transforms),
-                                    Rand3DElasticd(keys=keys, prob=0.8,
-                                                   sigma_range=(5, 10),
-                                                   magnitude_range=self.config['parameters']['transforms']['elastic'])
-                                    if 'elastic' in self.config['parameters'][
-                                        'transforms'] and self.config['parameters']['transforms']['elastic']
-                                    else Identityd(keys=['image']),
-                                    RandZoomd(keys=keys + ['labels', 'distances'], prob=0.8,
+                                    RandZoomd(keys=spatial_keys, mode=zoom_mode, prob=0.8,
                                               min_zoom=self.config['parameters']['transforms']['zoom'][0],
                                               max_zoom=self.config['parameters']['transforms']['zoom'][1],
                                               padding_mode='constant') if 'zoom' in self.config['parameters'][
                                         'transforms'] and self.config['parameters']['transforms'][
                                                                               'zoom'] else Identityd(keys=['image']),
-                                    RandRotated(keys=keys + ['labels', 'distances'], prob=0.8,
+                                    RandRotated(keys=spatial_keys, mode=rotate_mode, prob=0.8,
                                                 range_x=self.config['parameters']['transforms']['rotate'][0],
                                                 range_y=self.config['parameters']['transforms']['rotate'][1],
                                                 range_z=self.config['parameters']['transforms']['rotate'][2],
@@ -226,17 +245,17 @@ class SemanticSegmentationModule(pl.LightningModule):
                                         'transforms'] and self.config['parameters']['transforms'][
                                            'rotate'] else Identityd(keys=['image']),
                                     SqueezeDimd(keys=['labels'],
-                                                dim=0) if self.config['parameters']['network']['out_channels'] > 1
+                                                dim=0) if self.out_channels > 1
                                     else Identityd(keys=['labels']),
-                                    RandFlipd(keys=keys + ['labels', 'distances'], prob=0.8, spatial_axis=-1)
+                                    RandFlipd(keys=spatial_keys, prob=0.8, spatial_axis=-1)
                                     if 'flip' in self.config['parameters']['transforms'] and
                                        self.config['parameters']['transforms']['flip'] else
                                     Identityd(keys=['image']),
-                                    RandFlipd(keys=keys + ['labels', 'distances'], prob=0.8, spatial_axis=-2)
+                                    RandFlipd(keys=spatial_keys, prob=0.8, spatial_axis=-2)
                                     if 'flip' in self.config['parameters']['transforms'] and
                                        self.config['parameters']['transforms']['flip'] else
                                     Identityd(keys=['image']),
-                                    RandFlipd(keys=keys + ['labels', 'distances'], prob=0.8, spatial_axis=-3)
+                                    RandFlipd(keys=spatial_keys, prob=0.8, spatial_axis=-3)
                                     if 'flip' in self.config['parameters']['transforms'] and
                                        self.config['parameters']['transforms']['flip'] else
                                     Identityd(keys=['image']),
@@ -248,10 +267,9 @@ class SemanticSegmentationModule(pl.LightningModule):
                                     NormalizeIntensityd(keys=keys,
                                                         subtrahend=self.config['parameters']['data']['mean'],
                                                         divisor=self.config['parameters']['data']['std']),
-                                    EnsureTyped(keys=keys + ['distances'],
-                                                data_type='tensor', dtype=torch.float),
+                                    EnsureTyped(keys=keys + npz_keys, data_type='tensor', dtype=torch.float),
                                     EnsureTyped(keys=['labels'], data_type='tensor', dtype=torch.float
-                                    if self.config['parameters']['network']['out_channels'] == 1 else torch.long)])
+                                    if self.out_channels == 1 else torch.long)])
 
         if self.config['hyper_parameters']['cache_rate'] > 0:
             # cached datasets - 10x faster than regular datasets
@@ -348,59 +366,47 @@ class SemanticSegmentationModule(pl.LightningModule):
                          'frequency': 1}
         return [optimizer], [lr_schedulers]
 
-    def training_step(self, batch, batch_idx):
-        inputs, labels, distance = batch['image'], batch['labels'], batch['distances']
+    def _compute_losses(self, batch, prefix):
+        inputs, labels = batch['image'], batch['labels']
         if self.use_noisy_input:
-            inputs = batch[random.choices(['image', 'noisy_image'], weights=[2, 1], k=1)[0]]
+            weights = [2, 1] if prefix == 'train' else [1, 1]
+            inputs = batch[random.choices(['image', 'noisy_image'], weights=weights, k=1)[0]]
+
         labels_pred, distance_pred = self.forward(inputs)
+
         labels_loss = self.semantic_loss_function(labels_pred, labels)
         if 'use_dice_loss' in self.config['parameters']['network'] and self.config['parameters']['network'][
             'use_dice_loss']:
-            if self.config['parameters']['network']['out_channels'] > 1:
+            if self.out_channels > 1:
                 labels = torch.unsqueeze(labels, 1)
-            labels_loss += self.semantic_loss_function2(labels_pred, labels)
-        distance_pred = nn.Tanh()(distance_pred)
-        distances_loss = self.distance_loss_function(distance_pred, distance)
+            labels_loss = labels_loss + self.semantic_loss_function2(labels_pred, labels)
 
-        if self.config['parameters']['network']['distance_prediction']:
-            loss = labels_loss + distances_loss
-            self.log('train_loss', loss, on_step=False, on_epoch=True, batch_size=self.batch_size,
-                     sync_dist=self.sync_dist)
-            self.log('train_labels_loss', labels_loss, on_step=False, on_epoch=True, batch_size=self.batch_size,
-                     sync_dist=self.sync_dist)
-            self.log('train_distance_loss', distances_loss, on_step=False, on_epoch=True, batch_size=self.batch_size,
-                     sync_dist=self.sync_dist)
-        else:
-            loss = labels_loss
-            self.log('train_loss', labels_loss, on_step=False, on_epoch=True, batch_size=self.batch_size,
-                     sync_dist=self.sync_dist)
+        loss = labels_loss
+        self.log(f'{prefix}_labels_loss', labels_loss, on_step=False, on_epoch=True, batch_size=self.batch_size,
+                 sync_dist=self.sync_dist)
+
+        if self.use_distances:
+            distance_pred = nn.Tanh()(distance_pred)
+            distances_loss = self.distance_loss_function(distance_pred, batch['distances'])
+            loss = loss + distances_loss
+            self.log(f'{prefix}_distance_loss', distances_loss, on_step=False, on_epoch=True,
+                     batch_size=self.batch_size, sync_dist=self.sync_dist)
+
+        if self.use_skeletons:
+            skeleton_loss = self.skeleton_loss_function(labels_pred, batch['skeletons'])
+            loss = loss + self.skeleton_weight * skeleton_loss
+            self.log(f'{prefix}_skeleton_loss', skeleton_loss, on_step=False, on_epoch=True,
+                     batch_size=self.batch_size, sync_dist=self.sync_dist)
+
+        self.log(f'{prefix}_loss', loss, on_step=False, on_epoch=True, batch_size=self.batch_size,
+                 sync_dist=self.sync_dist)
         return loss
 
-    def validation_step(self, batch, batch_idx):
-        inputs, labels, distance = batch['image'], batch['labels'], batch['distances']
-        if self.use_noisy_input:
-            inputs = batch[random.choices(['image', 'noisy_image'], weights=[1, 1], k=1)[0]]
-        labels_pred, distance_pred = self.forward(inputs)
-        labels_loss = self.semantic_loss_function(labels_pred, labels)
-        if 'use_dice_loss' in self.config['parameters']['network'] and self.config['parameters']['network'][
-            'use_dice_loss']:
-            if self.config['parameters']['network']['out_channels'] > 1:
-                labels = torch.unsqueeze(labels, 1)
-            labels_loss += self.semantic_loss_function2(labels_pred, labels)
-        distance_pred = nn.Tanh()(distance_pred)
-        distances_loss = self.distance_loss_function(distance_pred, distance)
+    def training_step(self, batch, batch_idx):
+        return self._compute_losses(batch, 'train')
 
-        if self.config['parameters']['network']['distance_prediction']:
-            loss = labels_loss + distances_loss
-            self.log('val_loss', loss, on_step=False, on_epoch=True, batch_size=self.batch_size,
-                     sync_dist=self.sync_dist)
-            self.log('val_labels_loss', labels_loss, on_step=False, on_epoch=True, batch_size=self.batch_size,
-                     sync_dist=self.sync_dist)
-            self.log('val_distance_loss', distances_loss, on_step=False, on_epoch=True, batch_size=self.batch_size,
-                     sync_dist=self.sync_dist)
-        else:
-            self.log('val_loss', labels_loss, on_step=False, on_epoch=True, batch_size=self.batch_size,
-                     sync_dist=self.sync_dist)
+    def validation_step(self, batch, batch_idx):
+        self._compute_losses(batch, 'val')
 
     def on_train_epoch_start(self):
         if self.config['hyper_parameters']['cache_rate'] > 0 and 'replace_rate' in self.config['hyper_parameters']:
