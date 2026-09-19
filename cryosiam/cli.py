@@ -141,14 +141,10 @@ def main():
     sp_simsiam.set_defaults(func=lambda args: visualize_embeddings_main(args.config_file))
 
     # cluster subtomograms using SimSiam embeddings
-    sp_simsiam = subparsers.add_parser(
-        "simsiam_cluster_subtomograms",
-        help="Cluster subtomograms using SimSiam embeddings")
-    sp_simsiam.add_argument(
-        '--config_file',
-        type=str,
-        required=True,
-        help='Path to the .yaml configuration file')
+    sp_simsiam = subparsers.add_parser("simsiam_cluster_subtomograms",
+                                       help="Cluster subtomograms using SimSiam embeddings")
+    sp_simsiam.add_argument('--config_file', type=str, required=True,
+                            help='Path to the .yaml configuration file')
     sp_simsiam.set_defaults(
         func=lambda args:
         cluster_subtomograms_simsiam_main(args.config_file))

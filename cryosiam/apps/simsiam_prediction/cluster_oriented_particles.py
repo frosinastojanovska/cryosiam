@@ -415,9 +415,8 @@ def read_orientation_table(
             temp = pd.DataFrame({
                 'tomo': star_df[tomo_col].astype(str),
             })
-            instance_ids = (
-                    temp.groupby('tomo', sort=False).cumcount() + 1
-            ).astype(np.int64).to_numpy()
+            instance_ids = (temp.groupby('tomo', sort=False).cumcount() + 1
+                            ).astype(np.int64).to_numpy()
 
         if 'rlnClassLabel' in star_df.columns:
             class_labels = star_df['rlnClassLabel'].astype(str).to_numpy()
@@ -655,13 +654,11 @@ def load_params(config_file):
         'pca_components')
     use_pca = app_cfg.get('use_pca')
     if use_pca is None:
-        use_pca = (
-                pca_components_value is not None)
+        use_pca = (pca_components_value is not None)
     if pca_components_value is None:
         pca_components_value = 16
 
-    old_mask_requested = (
-            old_masking_type in (1, 2))
+    old_mask_requested = (old_masking_type in (1, 2))
 
     params = {
         'simsiam_model': model_path,
@@ -1122,8 +1119,7 @@ def extract_simsiam_input(
             row['average_center_x']],
             dtype=np.float64)
 
-        center_offset = (
-                refined_center - center)
+        center_offset = (refined_center - center)
 
         particle_mask = oriented_reference_mask(
             reference_mask,
@@ -1692,10 +1688,9 @@ def oriented_reference_mask(
             center_offset_zyx, dtype=np.float64)
 
     # scipy affine_transform maps output coordinates -> input coordinates.
-    offset = (
-            reference_center -
-            R_zyx @ crop_center -
-            R_zyx @ center_offset_zyx)
+    offset = (reference_center -
+              R_zyx @ crop_center -
+              R_zyx @ center_offset_zyx)
 
     mask = affine_transform(
         reference_mask,
@@ -1746,8 +1741,7 @@ def prepare_reference_mask(
             fill_value=float(
                 np.median(reference_map)))
 
-        standardized_map_path = (
-                class_dir / 'reference_map.mrc')
+        standardized_map_path = (class_dir / 'reference_map.mrc')
         write_mrc(
             standardized_map_path,
             reference_map)
@@ -1759,9 +1753,8 @@ def prepare_reference_mask(
                 'reference_map was supplied and '
                 'derive_reference_map=false.')
 
-        standardized_map_path = (
-                class_dir /
-                'derived_reference_map.mrc')
+        standardized_map_path = (class_dir /
+                                 'derived_reference_map.mrc')
 
         if standardized_map_path.is_file():
             print(
@@ -1816,9 +1809,8 @@ def save_generated_instance_masks(
     and save an instance-label H5 volume. This is useful when the input STAR
     did not originate from CryoSiam and therefore has no prediction H5 masks.
     """
-    output_dir = (
-            Path(class_dir) /
-            'generated_instance_masks')
+    output_dir = (Path(class_dir) /
+                  'generated_instance_masks')
     output_dir.mkdir(
         parents=True, exist_ok=True)
 
@@ -1867,9 +1859,8 @@ def save_generated_instance_masks(
                 volume_shape,
                 dtype=np.int64)
             src_start = np.maximum(-start, 0)
-            src_stop = (
-                    patch_shape -
-                    np.maximum(stop - volume_shape_arr, 0))
+            src_stop = (patch_shape -
+                        np.maximum(stop - volume_shape_arr, 0))
             dst_start = np.maximum(start, 0)
             dst_stop = np.minimum(
                 stop, volume_shape_arr)
@@ -1899,9 +1890,8 @@ def save_generated_instance_masks(
 
         safe_tomo = Path(
             str(tomo_name)).stem
-        out_path = (
-                output_dir /
-                f'{safe_tomo}_instances.h5')
+        out_path = (output_dir /
+                    f'{safe_tomo}_instances.h5')
 
         with h5py.File(
                 out_path, 'w') as hf:
@@ -2153,8 +2143,7 @@ def save_cluster_files(metadata, class_dir, save_individual=False):
         for cluster_label in sorted(
                 int(v) for v in metadata['cluster'].unique()):
             subset = metadata[
-                metadata['cluster'] == cluster_label
-                ].copy()
+                metadata['cluster'] == cluster_label].copy()
 
             csv_path = (
                     cluster_file_dir /
@@ -2301,8 +2290,7 @@ def create_particle_crop_previews(
                         reference_mask,
                         crop_size,
                         rotation_from_row(row),
-                        center_offset_zyx=(
-                                refined_center - center))
+                        center_offset_zyx=(refined_center - center))
 
                     if params['mask_expand'] > 0:
                         particle_mask = binary_dilation(
@@ -2376,8 +2364,7 @@ def make_interactive_umap(df, averages, output_path, title):
             values = [str(label)]
             preview = (
                 str(row['particle_preview_relpath'])
-                if 'particle_preview_relpath' in row.index and
-                   pd.notna(row['particle_preview_relpath'])
+                if 'particle_preview_relpath' in row.index and pd.notna(row['particle_preview_relpath'])
                 else '')
             values.append(preview)
             values.append(int(row['_html_row_index']))
@@ -2804,8 +2791,7 @@ def build_embedding_cache_manifest(
 
     reference_map_mtime_ns = (
         None
-        if reference_map is None or
-           not reference_map.is_file()
+        if reference_map is None or not reference_map.is_file()
         else int(reference_map.stat().st_mtime_ns))
 
     reference_mask_resolved = (
@@ -2856,8 +2842,7 @@ def build_embedding_cache_manifest(
             params['reference_mask_sigma']),
         'reference_mask_threshold': (
             None
-            if params[
-                   'reference_mask_threshold'] is None
+            if params['reference_mask_threshold'] is None
             else float(params[
                            'reference_mask_threshold'])),
         'reference_mask_dilation': int(
@@ -2968,8 +2953,7 @@ def process_class(class_name, class_df, params, data_cfg, net, dim, device,
             dist.barrier()
 
         if rank != 0:
-            reference_mask_path = (
-                    class_dir / 'reference_mask.mrc')
+            reference_mask_path = (class_dir / 'reference_mask.mrc')
             with mrcfile.open(
                     reference_mask_path,
                     permissive=True) as mrc:

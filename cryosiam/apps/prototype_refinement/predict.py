@@ -1114,10 +1114,8 @@ def _main(config_file_path, filename=None):
                      'group_ranks': node_info['group_ranks']})
 
     if node_info['group_rank'] == 0:
-        assigned_names = [os.path.basename(files[job['file_idx']]) for job in jobs]
         print(f'Node {node_info["node_id"]} ({node_info["hostname"]}) uses ranks {node_info["group_ranks"]} / '
               f'{node_info["group_size"]} GPU(s)')
-        print(f'  assigned tomograms: {assigned_names if assigned_names else "none"}')
         print(f'  local temp dir: {shared_tmp_dir}')
 
     def postprocess_and_write(tomo_name, h5_out, ordered_names, seg_mask,
