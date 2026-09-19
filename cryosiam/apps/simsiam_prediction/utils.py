@@ -3,15 +3,8 @@ import collections
 from cryosiam.networks.nets import SimSiam
 
 
-def load_prediction_model(checkpoint_path, contrastive=False, device="cuda:0"):
-    """Load SimSiam trained model from given checkpoint
-    :param checkpoint_path: path to the checkpoint
-    :type checkpoint_path: str
-    :param device: on which device should the model be loaded, default is cuda:0
-    :type device: str
-    :return: SimSiam model with laoded trained weights
-    :rtype: cryoet_torch.networks.nets.SimSiam
-    """
+def load_backbone(checkpoint_path, contrastive=False, device='cuda:0'):
+    """Load SimSiam trained model from given checkpoint."""
     checkpoint = torch.load(checkpoint_path, weights_only=False)
     config = checkpoint['hyper_parameters']['backbone_config' if contrastive else 'config']
     model = SimSiam(block_type=config['parameters']['network']['block_type'],
@@ -24,10 +17,9 @@ def load_prediction_model(checkpoint_path, contrastive=False, device="cuda:0"):
                     pred_dim=config['parameters']['network']['pred_dim'])
     new_state_dict = collections.OrderedDict()
     for k, v in checkpoint['state_dict'].items():
-        name = k.replace("_model.", '')  # remove `_model.`
+        name = k.replace('_model.', '')
         new_state_dict[name] = v
     model.load_state_dict(new_state_dict)
     model.eval()
-    device = torch.device(device)
-    model.to(device)
-    return model
+    model.to(torch.device(device))
+    return model, config['parameters']['network']['dim']

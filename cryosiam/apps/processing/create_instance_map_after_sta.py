@@ -4,7 +4,7 @@ import h5py
 import starfile
 import argparse
 import numpy as np
-from scipy.ndimage import map_coordinates
+from scipy.ndimage import map_coordinates, zoom
 from skimage.measure import regionprops_table
 from scipy.spatial.transform import Rotation as R
 
@@ -67,7 +67,7 @@ def read_star_file(star_file):
     return data
 
 
-def main(star_file, map_file, output_dir, map_threshold, example_tomogram, tomo_name):
+def main(star_file, map_file, output_dir, map_threshold, tomograms_dir, tomo_name, h5_output, star_pixel_size_arg):
     os.makedirs(output_dir, exist_ok=True)
     data = read_star_file(star_file)
     if 'rlnTomoName' in data.columns:
@@ -78,35 +78,82 @@ def main(star_file, map_file, output_dir, map_threshold, example_tomogram, tomo_
     if tomo_name is not None:
         data = data[data[header_name] == tomo_name]
 
-    reader = MrcReader(read_in_mem=True)
-    tomogram = reader.read(example_tomogram)
-    tomogram = tomogram.data
-    tomogram.setflags(write=True)
+    has_pixel_size_column = 'rlnPixelSize' in data.columns
+    if not has_pixel_size_column and star_pixel_size_arg is None:
+        raise ValueError(
+            "The STAR file has no 'rlnPixelSize' column. Please provide the pixel size "
+            "of the coordinates via --star_pixel_size so coordinates can be aligned with "
+            "each tomogram's voxel size."
+        )
 
     reader = MrcReader(read_in_mem=True)
     reference_map = reader.read(map_file)
+    map_voxel_size = reference_map.voxel_size
+    map_pixel_size = float(map_voxel_size['x'])
     reference_map = reference_map.data
     reference_map.setflags(write=True)
     reference_map = (reference_map > map_threshold).astype(np.uint8)
 
-    radius = reference_map.shape[0] // 2
-    size = tomogram.shape
-    z_dim, y_dim, x_dim = size
-
     for t_name in np.unique(data[header_name]):
         print(f'Processing tomo: {t_name}')
+
+        tomo_path = os.path.join(tomograms_dir, f'{t_name}.mrc')
+        if not os.path.exists(tomo_path):
+            print(f'Tomo {t_name} not found, continuing')
+            continue
+        reader = MrcReader(read_in_mem=True)
+        tomogram = reader.read(tomo_path)
+        voxel_size = tomogram.voxel_size
+        tomo_pixel_size = float(voxel_size['x'])
+        tomogram = tomogram.data
+        tomogram.setflags(write=True)
+        size = tomogram.shape
+        z_dim, y_dim, x_dim = size
+
+        # Rescale the reference map so its physical size matches this tomogram's voxel size
+        map_to_tomo_ratio = map_pixel_size / tomo_pixel_size
+        if abs(map_to_tomo_ratio - 1.0) > 1e-3:
+            scaled_reference_map = zoom(reference_map, map_to_tomo_ratio, order=1)
+            scaled_reference_map = (scaled_reference_map > 0.5).astype(np.uint8)
+        else:
+            scaled_reference_map = reference_map
+        radius = scaled_reference_map.shape[0] // 2
+
         current_data = data[data[header_name] == t_name]
         print(f'Placing {current_data.shape[0]} instances')
         output = np.zeros(size)
         for i, row in current_data.iterrows():
-            x = int(row['rlnCoordinateX'])
-            y = int(row['rlnCoordinateY'])
-            z = int(row['rlnCoordinateZ'])
+            if has_pixel_size_column:
+                star_pixel_size = float(row['rlnPixelSize'])
+            else:
+                # STAR file has no per-particle pixel size - use the one supplied on the CLI
+                star_pixel_size = star_pixel_size_arg
+
+            binning_ratio = star_pixel_size / tomo_pixel_size
+            if 'rlnOriginXAngst' in data.columns:
+                x = int(
+                    (float(row['rlnCoordinateX']) - float(row['rlnOriginXAngst']) / star_pixel_size) * binning_ratio)
+                y = int(
+                    (float(row['rlnCoordinateY']) - float(row['rlnOriginYAngst']) / star_pixel_size) * binning_ratio)
+                z = int(
+                    (float(row['rlnCoordinateZ']) - float(row['rlnOriginZAngst']) / star_pixel_size) * binning_ratio)
+            else:
+                # No origin/refinement shift available, but we can still align
+                # the STAR file's pixel size with the tomogram's actual voxel size
+                x = int(float(row['rlnCoordinateX']) * binning_ratio)
+                y = int(float(row['rlnCoordinateY']) * binning_ratio)
+                z = int(float(row['rlnCoordinateZ']) * binning_ratio)
+
+            if not (0 <= x < x_dim and 0 <= y < y_dim and 0 <= z < z_dim):
+                print(f'  SKIPPING particle {i} in {t_name}: x={x} (dim={x_dim}), '
+                      f'y={y} (dim={y_dim}), z={z} (dim={z_dim}) - out of bounds')
+                continue
+
             rot = row['rlnAngleRot']
             tilt = row['rlnAngleTilt']
             psi = row['rlnAnglePsi']
 
-            rotated_ref = rotate_reference(reference_map, rot, tilt, psi) * (i + 1)
+            rotated_ref = rotate_reference(scaled_reference_map, rot, tilt, psi) * (i + 1)
 
             rotated_ref = rotated_ref[
                           max(radius - z, 0): (
@@ -125,18 +172,21 @@ def main(star_file, map_file, output_dir, map_threshold, example_tomogram, tomo_
             max(0, x - radius): min(x + radius, x_dim),
             ][rotated_ref > 0] = rotated_ref[rotated_ref > 0]
 
-        optimal_dtype = find_optimal_int_dtype(output)
-        if optimal_dtype:
-            output = output.astype(optimal_dtype)
+        if h5_output:
+            optimal_dtype = find_optimal_int_dtype(output)
+            if optimal_dtype:
+                output = output.astype(optimal_dtype)
 
-        with h5py.File(os.path.join(output_dir, f'{t_name}_instance_preds.h5'), 'w') as f:
-            f.create_dataset('instances', data=output)
+            with h5py.File(os.path.join(output_dir, f'{t_name}_instance_preds.h5'), 'w') as f:
+                f.create_dataset('instances', data=output)
+        else:
+            writer = MrcWriter(output_dtype=np.float32, overwrite=True)
+            writer.set_metadata({'voxel_size': voxel_size})
+            writer.set_data_array(output.astype(np.float32), channel_dim=None)
+            writer.write(os.path.join(output_dir, f'{t_name}.mrc'))
 
-        regions = regionprops_table(output, properties=['label', 'area', 'bbox', 'centroid'])
+        regions = regionprops_table(output.astype(np.int64), properties=['label', 'area', 'bbox', 'centroid'])
         regions_file = os.path.join(output_dir, f'{t_name}_instance_regions.csv')
-        # TODO: Remove the following two lines
-        regions['second_label'] = current_data['rlnLabel'].values.tolist()
-        regions['cc_score'] = current_data['rlnCC'].values.tolist()
         with open(regions_file, 'w') as f:
             w = csv.writer(f)
             w.writerow(list(regions.keys()))
@@ -154,14 +204,19 @@ def parser_helper(description=None):
     parser.add_argument('--output_dir', type=str, required=True, help='path to folder to save the output tomogram/s')
     parser.add_argument("--map_threshold", type=float, required=True,
                         help="Threshold for the map to binarize it.")
-    parser.add_argument('--example_tomogram', type=str, required=True,
-                        help='path to one tomogram to determine the 3D size of the output')
+    parser.add_argument('--tomograms_dir', type=str, required=True,
+                        help='path to folder containing all tomograms, named to match rlnMicrographName + .mrc')
     parser.add_argument('--tomo_name', type=str, required=False,
-                        help='process only this tomogram, the name should match the rlnMicrographName')
+                        help='process only this tomogram, the name should match the rlnMicrographName or rlnTomoName')
+    parser.add_argument("--h5_output", action="store_true", default=False, help="Store h5 files instead of mrc files")
+    parser.add_argument('--star_pixel_size', type=float, required=False, default=None,
+                        help='pixel size (in Angstrom) of the coordinates in the STAR file. Required only if '
+                             'the STAR file does not have an rlnPixelSize column.')
     return parser
 
 
 if __name__ == '__main__':
     parser = parser_helper()
     args = parser.parse_args()
-    main(args.star_file, args.map_file, args.output_dir, args.map_threshold, args.example_tomogram, args.tomo_name)
+    main(args.star_file, args.map_file, args.output_dir, args.map_threshold, args.tomograms_dir, args.tomo_name,
+         args.h5_output, args.star_pixel_size)

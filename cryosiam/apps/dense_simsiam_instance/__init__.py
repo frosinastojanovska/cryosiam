@@ -1,3 +1,3 @@
 from .module import InstanceSegmentationModule
-from .instance_segmentation import instance_segmentation
+from .instance_segmentation import instance_segmentation, find_markers
 from .utils import load_backbone_model, load_prediction_model

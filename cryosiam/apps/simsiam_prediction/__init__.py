@@ -1,1 +1,1 @@
-from .utils import load_prediction_model
+from .utils import load_backbone

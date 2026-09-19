@@ -1,0 +1,17 @@
+trained_model: /path/to/checkpoint.ckpt
+mode: instance  # or scribble
+use_kmeans: false
+k_per_class: 3
+output_path: /path/to/prototypes.pt
+
+references:
+  - image: /path/to/tomo1.mrc
+    mask: /path/to/tomo1_instances.mrc
+    class_instance_ids:
+      ribosome: [1, 2, 5, 7]
+      membrane: [3, 4]
+  - image: /path/to/tomo2.mrc      # optional additional references, pooled together
+    mask: /path/to/tomo2_instances.mrc
+    class_instance_ids:
+      ribosome: [1]
+      membrane: [2, 6]

@@ -1,0 +1,54 @@
+data_folder: '/scratch/stojanov/simulated_datasets/experiments/new_models/specialized_particle_picking/data/tomograms'
+labels_folder: '/scratch/stojanov/simulated_datasets/experiments/new_models/specialized_particle_picking/data/gts'
+patches_folder: '/scratch/stojanov/simulated_datasets/new_models/prototype_matching_specialized/ribosome/patches'
+validation_ratio: 0.1
+log_dir: '/g/zaugg/stojanov/simulated_datasets/new_models/prototype_matching_refinement/ribosome/version_0'
+pretrained_model: '/g/zaugg/stojanov/simulated_datasets/new_models/prototype_matching/version_1/model/model_best.ckpt'
+file_extension: '.mrc'
+
+train_files: null
+
+continue_training: False
+
+n_classes: 1
+class_names: [ 'ribosome' ]
+original_class_indices: [ 1 ]
+expand_labels: 1
+min_instance_voxels: 10
+
+parameters:
+  nodes: 1
+  gpu_devices: 8
+  data:
+    patch_size: [ 128, 128, 128 ]
+    patch_overlap: 0.5
+    min: 0
+    max: 1
+    mean: 0
+    std: 1
+  transforms:
+    low_pass_sigma_range: [ 0.1, 2 ]
+    high_pass_sigma_range: [ 0.1, 0.2 ]
+    high_pass_sigma2_range: [ 2, 6 ]
+    noise_sigma_range: [ 0.05, 0.5 ]
+    spectrum_sigma: 0.1
+    scale_intensity_factors: null
+    zoom: False
+    rotate: False
+    flip: True
+  network:
+    spatial_dims: 3
+    in_channels: 1
+    proto_momentum: 0.2
+    unfreeze_backbone: True
+    unfreeze_decoder: True
+
+hyper_parameters:
+  cache_rate: 0
+  val_interval: 1
+  batch_size: 8
+  optimizer: 'adamw' # one of 'sgd', 'adam', 'adamw'
+  lr: 0.001
+  momentum: 0.9
+  weight_decay: 0.00001
+  max_epochs: 300

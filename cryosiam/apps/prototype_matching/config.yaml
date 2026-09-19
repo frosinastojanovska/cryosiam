@@ -1,0 +1,48 @@
+data_folder: '/g/mahamid/stojanov/simulated_datasets/simulated_data/tomograms/subtomograms/images_cube_denoised_64/'
+maps_folder: '/g/mahamid/stojanov/simulated_datasets/simulated_data/tomograms/subtomograms/maps/'
+distance_folder: '/g/mahamid/stojanov/simulated_datasets/simulated_data/tomograms/subtomograms/distances_cube_64'
+validation_ratio: 0.1
+log_dir: '/g/zaugg/stojanov/simulated_datasets/new_models/prototype_matching/version_0'
+pretrained_model: '/g/zaugg/stojanov/simulated_datasets/new_models/simsiam_latent_matching/version_1/model/last.ckpt'
+file_extension: '.mrc'
+
+train_files: null
+
+continue_training: False
+
+parameters:
+  nodes: 1
+  gpu_devices: 8
+  data:
+    patch_size: [ 64, 64, 64 ]
+    min: 0
+    max: 1
+    mean: 0
+    std: 1
+  transforms:
+    low_pass_map_sigma_range: [ 0.6, 1 ]
+    low_pass_sigma_range: null
+    high_pass_sigma_range: null
+    high_pass_sigma2_range: null
+    noise_sigma_range: null
+    combine_transforms: False
+    crop: True
+    flip: True
+  network:
+    spatial_dims: 3
+    in_channels: 1
+    unfreeze_encoder: True
+    unfreeze_query_encoder: False
+
+hyper_parameters:
+  cache_rate: 0
+  val_interval: 1
+  batch_size: 10
+  optimizer: 'adamw' # one of 'sgd', 'adam', 'adamw'
+  lr: 0.001
+  momentum: 0.9
+  weight_decay: 0.00001
+  max_epochs: 200
+  num_negatives: 3    # N negatives per positive
+  pos_weight: 1.0     # weight for positive TSDF loss
+  neg_weight: 1.0     # weight for negative MSE loss

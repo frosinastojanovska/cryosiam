@@ -14,7 +14,7 @@ class DenseSimSiam(nn.Module):
     def __init__(self, block_type='bottleneck', spatial_dims=3, n_input_channels=1,
                  num_layers=(1, 1, 1, 1), num_filters=(64, 128, 256, 512), no_max_pool=True, fpn_channels=128,
                  dim=2048, pred_dim=512, dense_dim=32, dense_pred_dim=64, include_levels=False,
-                 add_later_conv=False, decoder_type='fpn', decoder_layers=2):
+                 add_later_conv=False, decoder_type='fpn', decoder_layers=2, decoder=True):
         """
         dim: feature dimension (default: 2048)
         pred_dim: hidden dimension of the predictor (default: 512)
@@ -37,95 +37,97 @@ class DenseSimSiam(nn.Module):
             expansion = 4
         else:
             expansion = 1
-        if decoder_type == 'fpn':
-            self.decoder = FPNDecoder(num_filters=num_filters, spatial_dims=self.spatial_dims,
-                                      out_channels=fpn_channels, expansion=expansion, add_later_conv=add_later_conv)
-        else:
-            self.decoder = BiFPNDecoder(num_filters=num_filters, spatial_dims=self.spatial_dims,
-                                        out_channels=fpn_channels, expansion=expansion, num_layers=decoder_layers)
 
-        # build a 3-layer projector
-        prev_dim = self.encoder.fc.weight.shape[1]
-        self.global_projector = nn.Sequential(nn.Linear(prev_dim, prev_dim, bias=False),
-                                              nn.BatchNorm1d(prev_dim),
-                                              nn.ReLU(inplace=False),  # first layer
-                                              nn.Linear(prev_dim, prev_dim, bias=False),
-                                              nn.BatchNorm1d(prev_dim),
-                                              nn.ReLU(inplace=False),  # second layer
-                                              self.encoder.fc,
-                                              nn.BatchNorm1d(dim, affine=False))  # output layer
-        self.global_projector[6].bias.requires_grad = False  # hack: not use bias as it is followed by BN
+        if decoder:
+            if decoder_type == 'fpn':
+                self.decoder = FPNDecoder(num_filters=num_filters, spatial_dims=self.spatial_dims,
+                                          out_channels=fpn_channels, expansion=expansion, add_later_conv=add_later_conv)
+            else:
+                self.decoder = BiFPNDecoder(num_filters=num_filters, spatial_dims=self.spatial_dims,
+                                            out_channels=fpn_channels, expansion=expansion, num_layers=decoder_layers)
 
-        # build a 2-layer predictor
-        self.global_predictor = nn.Sequential(nn.Linear(dim, pred_dim, bias=False),
-                                              nn.BatchNorm1d(pred_dim),
-                                              nn.ReLU(inplace=False),  # hidden layer
-                                              nn.Linear(pred_dim, dim))  # output layer
+            # build a 3-layer projector
+            prev_dim = self.encoder.fc.weight.shape[1]
+            self.global_projector = nn.Sequential(nn.Linear(prev_dim, prev_dim, bias=False),
+                                                  nn.BatchNorm1d(prev_dim),
+                                                  nn.ReLU(inplace=False),  # first layer
+                                                  nn.Linear(prev_dim, prev_dim, bias=False),
+                                                  nn.BatchNorm1d(prev_dim),
+                                                  nn.ReLU(inplace=False),  # second layer
+                                                  self.encoder.fc,
+                                                  nn.BatchNorm1d(dim, affine=False))  # output layer
+            self.global_projector[6].bias.requires_grad = False  # hack: not use bias as it is followed by BN
 
-        if self.spatial_dims == 2:
-            conv = nn.Conv2d
-            norm = nn.BatchNorm2d
-        else:
-            conv = nn.Conv3d
-            norm = nn.BatchNorm3d
-        # build a 3-layer local projector
-        self.projector = nn.Sequential(conv(fpn_channels, fpn_channels, 1, bias=False),
-                                       norm(fpn_channels),
-                                       nn.ReLU(inplace=False),
-                                       conv(fpn_channels, fpn_channels, 1, bias=False),
-                                       norm(fpn_channels),
-                                       nn.ReLU(inplace=False),
-                                       conv(fpn_channels, dense_dim, 1),
-                                       norm(dense_dim, affine=False))
+            # build a 2-layer predictor
+            self.global_predictor = nn.Sequential(nn.Linear(dim, pred_dim, bias=False),
+                                                  nn.BatchNorm1d(pred_dim),
+                                                  nn.ReLU(inplace=False),  # hidden layer
+                                                  nn.Linear(pred_dim, dim))  # output layer
 
-        # build a 2-layer local predictor
-        self.predictor = nn.Sequential(conv(dense_dim, dense_pred_dim, 1, bias=False),
-                                       norm(dense_pred_dim),
-                                       nn.ReLU(inplace=False),
-                                       conv(dense_pred_dim, dense_dim, 1))
-        self.dense_criterion = nn.CosineSimilarity(dim=1)
-        self.global_criterion = nn.CosineSimilarity(dim=1)
+            if self.spatial_dims == 2:
+                conv = nn.Conv2d
+                norm = nn.BatchNorm2d
+            else:
+                conv = nn.Conv3d
+                norm = nn.BatchNorm3d
+            # build a 3-layer local projector
+            self.projector = nn.Sequential(conv(fpn_channels, fpn_channels, 1, bias=False),
+                                           norm(fpn_channels),
+                                           nn.ReLU(inplace=False),
+                                           conv(fpn_channels, fpn_channels, 1, bias=False),
+                                           norm(fpn_channels),
+                                           nn.ReLU(inplace=False),
+                                           conv(fpn_channels, dense_dim, 1),
+                                           norm(dense_dim, affine=False))
 
-        self.include_levels = include_levels
-        if self.include_levels:
-            self.level_projector_2 = nn.Sequential(conv(fpn_channels, fpn_channels, 1, bias=False),
-                                                   norm(fpn_channels),
-                                                   nn.ReLU(inplace=False),
-                                                   conv(fpn_channels, fpn_channels, 1, bias=False),
-                                                   norm(fpn_channels),
-                                                   nn.ReLU(inplace=False),
-                                                   conv(fpn_channels, dense_dim, 1),
-                                                   norm(dense_dim, affine=False))
-            self.level_projector_4 = nn.Sequential(conv(fpn_channels, fpn_channels, 1, bias=False),
-                                                   norm(fpn_channels),
-                                                   nn.ReLU(inplace=False),
-                                                   conv(fpn_channels, fpn_channels, 1, bias=False),
-                                                   norm(fpn_channels),
-                                                   nn.ReLU(inplace=False),
-                                                   conv(fpn_channels, dense_dim, 1),
-                                                   norm(dense_dim, affine=False))
-            self.level_projector_8 = nn.Sequential(conv(fpn_channels, fpn_channels, 1, bias=False),
-                                                   norm(fpn_channels),
-                                                   nn.ReLU(inplace=False),
-                                                   conv(fpn_channels, fpn_channels, 1, bias=False),
-                                                   norm(fpn_channels),
-                                                   nn.ReLU(inplace=False),
-                                                   conv(fpn_channels, dense_dim, 1),
-                                                   norm(dense_dim, affine=False))
             # build a 2-layer local predictor
-            self.level_predictor_2 = nn.Sequential(conv(dense_dim, dense_pred_dim, 1, bias=False),
-                                                   norm(dense_pred_dim),
-                                                   nn.ReLU(inplace=False),
-                                                   conv(dense_pred_dim, dense_dim, 1))
-            self.level_predictor_4 = nn.Sequential(conv(dense_dim, dense_pred_dim, 1, bias=False),
-                                                   norm(dense_pred_dim),
-                                                   nn.ReLU(inplace=False),
-                                                   conv(dense_pred_dim, dense_dim, 1))
-            self.level_predictor_8 = nn.Sequential(conv(dense_dim, dense_pred_dim, 1, bias=False),
-                                                   norm(dense_pred_dim),
-                                                   nn.ReLU(inplace=False),
-                                                   conv(dense_pred_dim, dense_dim, 1))
-            self.level_criterion = nn.CosineSimilarity(dim=1)
+            self.predictor = nn.Sequential(conv(dense_dim, dense_pred_dim, 1, bias=False),
+                                           norm(dense_pred_dim),
+                                           nn.ReLU(inplace=False),
+                                           conv(dense_pred_dim, dense_dim, 1))
+            self.dense_criterion = nn.CosineSimilarity(dim=1)
+            self.global_criterion = nn.CosineSimilarity(dim=1)
+
+            self.include_levels = include_levels
+            if self.include_levels:
+                self.level_projector_2 = nn.Sequential(conv(fpn_channels, fpn_channels, 1, bias=False),
+                                                       norm(fpn_channels),
+                                                       nn.ReLU(inplace=False),
+                                                       conv(fpn_channels, fpn_channels, 1, bias=False),
+                                                       norm(fpn_channels),
+                                                       nn.ReLU(inplace=False),
+                                                       conv(fpn_channels, dense_dim, 1),
+                                                       norm(dense_dim, affine=False))
+                self.level_projector_4 = nn.Sequential(conv(fpn_channels, fpn_channels, 1, bias=False),
+                                                       norm(fpn_channels),
+                                                       nn.ReLU(inplace=False),
+                                                       conv(fpn_channels, fpn_channels, 1, bias=False),
+                                                       norm(fpn_channels),
+                                                       nn.ReLU(inplace=False),
+                                                       conv(fpn_channels, dense_dim, 1),
+                                                       norm(dense_dim, affine=False))
+                self.level_projector_8 = nn.Sequential(conv(fpn_channels, fpn_channels, 1, bias=False),
+                                                       norm(fpn_channels),
+                                                       nn.ReLU(inplace=False),
+                                                       conv(fpn_channels, fpn_channels, 1, bias=False),
+                                                       norm(fpn_channels),
+                                                       nn.ReLU(inplace=False),
+                                                       conv(fpn_channels, dense_dim, 1),
+                                                       norm(dense_dim, affine=False))
+                # build a 2-layer local predictor
+                self.level_predictor_2 = nn.Sequential(conv(dense_dim, dense_pred_dim, 1, bias=False),
+                                                       norm(dense_pred_dim),
+                                                       nn.ReLU(inplace=False),
+                                                       conv(dense_pred_dim, dense_dim, 1))
+                self.level_predictor_4 = nn.Sequential(conv(dense_dim, dense_pred_dim, 1, bias=False),
+                                                       norm(dense_pred_dim),
+                                                       nn.ReLU(inplace=False),
+                                                       conv(dense_pred_dim, dense_dim, 1))
+                self.level_predictor_8 = nn.Sequential(conv(dense_dim, dense_pred_dim, 1, bias=False),
+                                                       norm(dense_pred_dim),
+                                                       nn.ReLU(inplace=False),
+                                                       conv(dense_pred_dim, dense_dim, 1))
+                self.level_criterion = nn.CosineSimilarity(dim=1)
 
     def forward(self, x1, x2):
         # compute features for one view
@@ -160,9 +162,9 @@ class DenseSimSiam(nn.Module):
             levels_p2_8 = self.level_predictor_8(levels_z2_8)
 
             return p1, p2, z1.detach(), z2.detach(), p1_global, p2_global, z1_global.detach(), z2_global.detach(), \
-                   levels_p1_2, levels_p1_4, levels_p1_8, levels_p2_2, levels_p2_4, levels_p2_8, \
-                   levels_z1_2.detach(), levels_z1_4.detach(), levels_z1_8.detach(), \
-                   levels_z2_2.detach(), levels_z2_4.detach(), levels_z2_8.detach()
+                levels_p1_2, levels_p1_4, levels_p1_8, levels_p2_2, levels_p2_4, levels_p2_8, \
+                levels_z1_2.detach(), levels_z1_4.detach(), levels_z1_8.detach(), \
+                levels_z2_2.detach(), levels_z2_4.detach(), levels_z2_8.detach()
         else:
             feats1 = self.decoder(feats1)
             feats2 = self.decoder(feats2)
@@ -266,6 +268,28 @@ class DenseSimSiam(nn.Module):
         outputs['res4'] = x
         x = self.encoder.layer4(x)
         outputs['res5'] = x
+
+        x_pooled = self.encoder.avgpool(x)
+        x_pooled = x_pooled.view(x_pooled.size(0), -1)
+
+        return outputs, x_pooled
+
+    def get_encoder_features_list(self, x):
+        outputs = []
+        x = self.encoder.conv1(x)
+        x = self.encoder.bn1(x)
+        x = self.encoder.act(x)
+        if not self.encoder.no_max_pool:
+            x = self.encoder.maxpool(x)
+
+        x = self.encoder.layer1(x)
+        outputs.append(x)  # res2
+        x = self.encoder.layer2(x)
+        outputs.append(x)  # res3
+        x = self.encoder.layer3(x)
+        outputs.append(x)  # res4
+        x = self.encoder.layer4(x)
+        outputs.append(x)  # res5
 
         x_pooled = self.encoder.avgpool(x)
         x_pooled = x_pooled.view(x_pooled.size(0), -1)

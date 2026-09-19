@@ -1,0 +1,30 @@
+data_folder: '/scratch/stojanov/simulated_datasets/experiments/new_models/specialized_particle_picking/data/tomograms'
+labels_folder: '/scratch/stojanov/simulated_datasets/experiments/new_models/specialized_particle_picking/data/gts'
+prediction_folder: '/g/zaugg/stojanov/simulated_datasets/new_models/prototype_matching_refinement/groel_es/version_1/predictions'
+trained_model: '/g/zaugg/stojanov/simulated_datasets/new_models/prototype_matching_refinement/groel_es/version_1/model/model_best.ckpt'
+file_extension: '.mrc'
+
+test_files: ['sample_1.mrc']
+
+reuse_predictions: False
+save_pca_rgb: True
+
+predict_classes: null   # or ['groel', 'groel_es_half']
+save_h5: both           # both | probabilities | similarities | none
+
+prob_threshold: 0.5
+dist_threshold: 0.0
+min_voxels: 50
+
+parameters:
+  nodes: 1
+  gpu_devices: 8
+  data:
+    patch_size: [ 128, 128, 128 ]
+    min: 0
+    max: 1
+    mean: 0
+    std: 1
+
+hyper_parameters:
+  batch_size: 3

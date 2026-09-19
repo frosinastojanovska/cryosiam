@@ -1,0 +1,66 @@
+data_folder: '/path/to/fine_tuning/tomograms'
+labels_folder: '/path/to/fine_tuning/gts'
+patches_folder: '/path/to/fine_tuning/patches'
+validation_ratio: 0.1
+log_dir: '/g/zaugg/stojanov/simulated_datasets/new_models/prototype_matching_refinement/ribosome/fine_tune_version_0'
+
+fine_tune_model: '/g/zaugg/stojanov/simulated_datasets/new_models/prototype_matching_refinement/ribosome/version_0/model/model_best.ckpt'
+file_extension: '.mrc'
+
+train_files: null
+continue_training: False
+
+n_classes: 1
+class_names: ['ribosome']
+original_class_indices: [1]
+expand_labels: 1
+min_instance_voxels: 10
+
+k_per_class: 10
+proto_momentum: 1.0
+use_proto_separation: false
+
+use_ppc_loss: true
+ppc_weight: 0.01
+use_ppd_loss: true
+ppd_weight: 0.001
+use_distances: false
+
+parameters:
+  nodes: 1
+  gpu_devices: 1
+  data:
+    patch_size: [128, 128, 128]
+    patch_overlap: 0.5
+    min: 0
+    max: 1
+    mean: 0
+    std: 1
+  transforms:
+    low_pass_sigma_range: [0.1, 2]
+    high_pass_sigma_range: [0.1, 0.2]
+    high_pass_sigma2_range: [2, 6]
+    noise_sigma_range: [0.05, 0.5]
+    spectrum_sigma: 0.1
+    scale_intensity_factors: null
+    zoom: false
+    rotate: false
+    flip: true
+  network:
+    spatial_dims: 3
+    in_channels: 1
+    temperature: 0.1
+    sinkhorn_iterations: 3
+    sinkhorn_epsilon: 0.05
+    unfreeze_backbone: false
+    unfreeze_decoder: true
+
+hyper_parameters:
+  cache_rate: 0
+  val_interval: 1
+  batch_size: 2
+  optimizer: 'adamw'
+  lr: 0.00001
+  momentum: 0.9
+  weight_decay: 0.00001
+  max_epochs: 30
