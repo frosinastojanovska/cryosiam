@@ -7,6 +7,11 @@ Self-supervised deep learning framework that works on dense and subtomogram leve
 
 For installation and usage instructions, please visit the [documentation page](https://frosinastojanovska.github.io/cryosiam-docs/).
 
+## License
+
+CryoSiam is licensed under the GNU General Public License v3.0
+(GPL-3.0-only). See the [LICENSE](LICENSE) file for details.
+
 ## Citation
 
 [Preprint](https://www.biorxiv.org/content/10.1101/2025.11.11.687379v1)

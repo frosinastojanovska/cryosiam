@@ -1,5 +1,6 @@
 name: cryosiam
 channels:
+  - pytorch3d
   - nvidia
   - pytorch
   - conda-forge
@@ -13,8 +14,8 @@ dependencies:
   - scikit-learn
   - pytorch>=2.1.0
   - torchvision
-  - faiss-gpu
   - pytorch-cuda
+  - pytorch3d
   - itk
   - pyyaml
   - plotly
@@ -24,6 +25,10 @@ dependencies:
   - mrcfile
   - starfile
   - scikit-image
+  - matplotlib
+  - open3d
+  - pillow
+  - tqdm
   - pip
   - pip:
       - edt
