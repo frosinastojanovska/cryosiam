@@ -24,7 +24,7 @@ from cryosiam.apps.dense_simsiam_semantic.create_patches import main as semantic
 from cryosiam.apps.dense_simsiam_semantic.train import main as semantic_train
 
 from cryosiam.apps.prototype_refinement.predict import main as prototype_refinement_predict_main
-from cryosiam.apps.prototype_refinement.train import main as prototype_refinement_finetune_main
+from cryosiam.apps.prototype_refinement.finetune import main as prototype_refinement_finetune_main
 from cryosiam.apps.prototype_refinement.save_orientation_references import main as save_orientation_references_main
 from cryosiam.apps.prototype_refinement.determine_initial_orientations import \
     main as determine_initial_orientations_main
