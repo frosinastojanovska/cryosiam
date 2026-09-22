@@ -24,11 +24,13 @@ from cryosiam.apps.dense_simsiam_semantic.create_patches import main as semantic
 from cryosiam.apps.dense_simsiam_semantic.train import main as semantic_train
 
 from cryosiam.apps.prototype_refinement.predict import main as prototype_refinement_predict_main
-from cryosiam.apps.prototype_refinement.finetune import main as prototype_refinement_finetune_main
+from cryosiam.apps.prototype_refinement.train import main as prototype_refinement_train_main
 from cryosiam.apps.prototype_refinement.save_orientation_references import main as save_orientation_references_main
 from cryosiam.apps.prototype_refinement.determine_initial_orientations import \
     main as determine_initial_orientations_main
 from cryosiam.apps.prototype_refinement.average_aligned_tomograms import main as average_aligned_tomograms_main
+from cryosiam.apps.prototype_refinement.calibrate_thresholds import \
+    main as prototype_refinement_calibrate_thresholds_main
 
 from cryosiam.apps.processing.invert_and_scale_intensity import main as invert_and_scale_intensity_main
 from cryosiam.apps.processing.create_sphere_mask_from_coordinates import \
@@ -99,8 +101,8 @@ def main():
     sp_semantic.set_defaults(func=lambda args: semantic_prediction_to_center_points(args.config_file))
 
     # prototype refinement prediction
-    sp_prototype = subparsers.add_parser("prototype_refinement_predict",
-                                         help="Run prototype refinement prediction")
+    sp_prototype = subparsers.add_parser("prototype_predict",
+                                         help="Run prototype-based particle prediction")
     sp_prototype.add_argument('--config_file', type=str, required=True, help='Path to the .yaml configuration file')
     sp_prototype.add_argument('--filename', type=str, required=False,
                               help='Process only this specific tomogram filename', default=None)
@@ -178,15 +180,16 @@ def main():
     sp_semantic.add_argument('--config_file', type=str, required=True, help='Path to the .yaml configuration file')
     sp_semantic.set_defaults(func=lambda args: semantic_train(args.config_file))
 
-    # prototype refinement fine-tuning
-    sp_prototype = subparsers.add_parser("prototype_refinement_finetune",
-                                         help="Run prototype refinement fine-tuning")
-    sp_prototype.add_argument('--config_file', type=str, required=True, help='Path to the .yaml configuration file')
-    sp_prototype.set_defaults(func=lambda args: prototype_refinement_finetune_main(args.config_file))
+    # prototype refinement training / fine-tuning
+    sp_prototype = subparsers.add_parser("prototype_refine",
+                                         help="Train or refine a prototype-based particle model")
+    sp_prototype.add_argument('--config_file', type=str, required=True,
+                              help='Path to the .yaml configuration file')
+    sp_prototype.set_defaults(func=lambda args: prototype_refinement_train_main(args.config_file))
 
     ############# Prototype refinement orientation commands #############
 
-    sp_prototype = subparsers.add_parser("prototype_refinement_save_orientation_references",
+    sp_prototype = subparsers.add_parser("prototype_save_orientation_references",
                                          help="Save orientation reference particles")
     sp_prototype.add_argument('--config_file', type=str, required=True, help='Path to the .yaml configuration file')
     sp_prototype.add_argument('--tomo_name', type=str, required=True, help='Tomogram name')
@@ -195,15 +198,20 @@ def main():
     sp_prototype.set_defaults(func=lambda args: save_orientation_references_main(
         args.config_file, args.tomo_name, args.instance_ids))
 
-    sp_prototype = subparsers.add_parser("prototype_refinement_determine_initial_orientations",
+    sp_prototype = subparsers.add_parser("prototype_determine_initial_orientations",
                                          help="Determine initial particle orientations")
     sp_prototype.add_argument('--config_file', type=str, required=True, help='Path to the .yaml configuration file')
     sp_prototype.set_defaults(func=lambda args: determine_initial_orientations_main(args.config_file))
 
-    sp_prototype = subparsers.add_parser("prototype_refinement_average_aligned_tomograms",
+    sp_prototype = subparsers.add_parser("prototype_average_aligned_tomograms",
                                          help="Average aligned subtomograms")
     sp_prototype.add_argument('--config_file', type=str, required=True, help='Path to the .yaml configuration file')
     sp_prototype.set_defaults(func=lambda args: average_aligned_tomograms_main(args.config_file))
+
+    sp = subparsers.add_parser("prototype_calibrate_thresholds",
+                               help="Calibrate prototype confidence thresholds from ground-truth centers")
+    sp.add_argument("--config_file", type=str, required=True, help="Path to the threshold-calibration YAML")
+    sp.set_defaults(func=lambda args: prototype_refinement_calibrate_thresholds_main(args.config_file))
 
     ############# Processing commands #############
     # Invert and scale command
