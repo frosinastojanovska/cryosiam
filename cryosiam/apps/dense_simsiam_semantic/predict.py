@@ -399,12 +399,8 @@ def read_requested_topology(cfg):
     return n_nodes, gpus_per_node
 
 
-def maybe_launch_distributed_from_config(config_file_path):
-    """
-    Auto-launch local workers for one node. Multi-node jobs must
-    already be launched by the scheduler/torchrun.
-    """
-
+def maybe_launch_distributed_from_config(config_file_path, filename=None):
+    """Auto-launch local workers for one node; multi-node jobs are launched externally."""
     if 'LOCAL_RANK' in os.environ or int(os.environ.get('WORLD_SIZE', '1')) > 1:
         return False
 
@@ -414,61 +410,52 @@ def maybe_launch_distributed_from_config(config_file_path):
     n_nodes, gpus_per_node = read_requested_topology(cfg)
 
     if n_nodes > 1:
-        raise RuntimeError('The config requests '
-                           f'parameters.nodes={n_nodes} '
-                           'with '
-                           'parameters.gpu_devices='
-                           f'{gpus_per_node} GPUs per '
-                           'node. Multi-node jobs must '
-                           'first be launched across '
-                           'the allocated nodes with '
-                           'your scheduler/torchrun so '
-                           'that RANK, LOCAL_RANK and '
-                           'WORLD_SIZE are set. The '
-                           'expected WORLD_SIZE is '
-                           f'{n_nodes * gpus_per_node}.')
+        raise RuntimeError(
+            f'The config requests parameters.nodes={n_nodes} with '
+            f'parameters.gpu_devices={gpus_per_node} GPUs per node. Multi-node '
+            'jobs must first be launched across the allocated nodes with your '
+            'scheduler/torchrun so that RANK, LOCAL_RANK and WORLD_SIZE are set. '
+            f'The expected WORLD_SIZE is {n_nodes * gpus_per_node}.')
 
     if gpus_per_node <= 1:
         return False
-
     if not torch.cuda.is_available():
-        raise RuntimeError('parameters.gpu_devices='
-                           f'{gpus_per_node}, but CUDA '
-                           'is not available.')
+        raise RuntimeError(
+            f'parameters.gpu_devices={gpus_per_node}, but CUDA is not available.')
 
     visible_gpus = torch.cuda.device_count()
-
     if gpus_per_node > visible_gpus:
-        raise RuntimeError('parameters.gpu_devices='
-                           f'{gpus_per_node}, but only '
-                           f'{visible_gpus} CUDA '
-                           'device(s) are visible. '
-                           'Check the allocation and '
-                           'CUDA_VISIBLE_DEVICES.')
+        raise RuntimeError(
+            f'parameters.gpu_devices={gpus_per_node}, but only {visible_gpus} CUDA '
+            'device(s) are visible. Check the allocation and CUDA_VISIBLE_DEVICES.')
 
-    cmd = [sys.executable,
-           '-m',
-           'torch.distributed.run',
-           '--standalone',
-           '--max_restarts=0',
-           f'--nproc_per_node='
-           f'{gpus_per_node}',
-           os.path.abspath(__file__),
-           *sys.argv[1:]]
+    cmd = [
+        sys.executable,
+        '-m', 'torch.distributed.run',
+        '--standalone',
+        '--max_restarts=0',
+        f'--nproc_per_node={gpus_per_node}',
+        os.path.abspath(__file__),
+        f'--config_file={config_file_path}',
+    ]
 
-    print('Launching distributed '
-          'semantic inference on 1 node '
-          f'with {gpus_per_node} GPU '
-          'worker(s)...')
+    if filename is not None:
+        cmd.extend(['--filename', filename])
+
+    print(
+        f'Launching distributed lamella inference on 1 node with '
+        f'{gpus_per_node} GPU worker(s)...')
 
     launch_env = os.environ.copy()
     launch_env.setdefault('OMP_NUM_THREADS', '1')
     subprocess.run(cmd, check=True, env=launch_env)
-
     return True
 
 
 def main(config_file_path, filename=None):
+    if maybe_launch_distributed_from_config(config_file_path, filename):
+        return
+
     distributed, rank, world_size, local_rank, device = init_distributed()
 
     with open(config_file_path, 'r') as ymlfile:
@@ -733,6 +720,4 @@ def main(config_file_path, filename=None):
 if __name__ == "__main__":
     parser = parser_helper()
     args = parser.parse_args()
-
-    if not maybe_launch_distributed_from_config(args.config_file):
-        main(args.config_file, getattr(args, 'filename', None))
+    main(args.config_file, getattr(args, 'filename', None))

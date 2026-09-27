@@ -722,7 +722,7 @@ def read_requested_topology(cfg):
     return n_nodes, gpus_per_node
 
 
-def maybe_launch_distributed_from_config(config_file_path):
+def maybe_launch_distributed_from_config(config_file_path, filename=None):
     """Auto-launch local workers for one node; multi-node jobs are launched externally."""
     if 'LOCAL_RANK' in os.environ or int(os.environ.get('WORLD_SIZE', '1')) > 1:
         return False
@@ -759,12 +759,16 @@ def maybe_launch_distributed_from_config(config_file_path):
         '--max_restarts=0',
         f'--nproc_per_node={gpus_per_node}',
         os.path.abspath(__file__),
-        *sys.argv[1:],
+        f'--config_file={config_file_path}',
     ]
+
+    if filename is not None:
+        cmd.extend(['--filename', filename])
 
     print(
         f'Launching distributed lamella inference on 1 node with '
         f'{gpus_per_node} GPU worker(s)...')
+
     launch_env = os.environ.copy()
     launch_env.setdefault('OMP_NUM_THREADS', '1')
     subprocess.run(cmd, check=True, env=launch_env)
@@ -772,6 +776,9 @@ def maybe_launch_distributed_from_config(config_file_path):
 
 
 def main(config_file_path, filename=None):
+    if maybe_launch_distributed_from_config(config_file_path, filename):
+        return
+
     distributed, rank, world_size, local_rank, device = init_distributed()
 
     with open(config_file_path, 'r') as ymlfile:
@@ -1125,5 +1132,4 @@ def main(config_file_path, filename=None):
 if __name__ == "__main__":
     parser = parser_helper()
     args = parser.parse_args()
-    if not maybe_launch_distributed_from_config(args.config_file):
-        main(args.config_file, getattr(args, 'filename', None))
+    main(args.config_file, getattr(args, 'filename', None))
