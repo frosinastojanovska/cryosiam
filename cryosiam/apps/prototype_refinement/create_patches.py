@@ -226,12 +226,20 @@ def main(config_file_path):
                                         overlap, padded=False):
             (fg_slices if training_mask[slices].max() > 0 else bg_slices).append(slices)
 
-        n_bg_target = int(round(bg_keep_fraction * len(fg_slices)))
-        bg_selected = []
-        if n_bg_target > 0 and bg_slices:
-            bg_idx = rng.choice(len(bg_slices), min(n_bg_target, len(bg_slices)),
-                                replace=False)
-            bg_selected = [bg_slices[i] for i in bg_idx]
+        # -1 keeps ALL background-only patches. For nonnegative
+        # values this is a ratio to the number of foreground-containing patches.
+        if bg_keep_fraction == -1:
+            bg_selected = bg_slices
+        elif bg_keep_fraction >= 0:
+            n_bg_target = min(len(bg_slices),
+                              int(np.ceil(bg_keep_fraction * len(fg_slices))))
+            if n_bg_target > 0:
+                bg_idx = rng.choice(len(bg_slices), n_bg_target, replace=False)
+                bg_selected = [bg_slices[i] for i in bg_idx]
+            else:
+                bg_selected = []
+        else:
+            raise ValueError('background_fraction must be -1 or >= 0.')
 
         print(f'  Patches: {len(fg_slices)} fg, {len(bg_selected)} bg '
               f'(of {len(bg_slices)} available)')

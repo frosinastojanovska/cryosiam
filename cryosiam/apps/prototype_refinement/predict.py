@@ -209,11 +209,19 @@ def h5_create_dataset(hf, name, data):
     return hf.create_dataset(name, data=data)
 
 
-def load_reusable_prediction(h5_out, use_distance_head):
+def load_reusable_prediction(h5_out, use_distance_head,
+                             prob_threshold=0.5, checkpoint_path=None,
+                             checkpoint_signature=None):
     if not os.path.exists(h5_out):
         return None
 
     with h5py.File(h5_out, 'r') as hf:
+        if float(hf.attrs.get('prob_threshold', float('nan'))) != float(prob_threshold):
+            return None
+        if checkpoint_path is not None and str(hf.attrs.get('trained_model', '')) != str(checkpoint_path):
+            return None
+        if checkpoint_signature is not None and str(hf.attrs.get('checkpoint_signature', '')) != checkpoint_signature:
+            return None
         stored_names = list(hf.attrs.get('class_names', []))
         stored_names = [
             x.decode() if isinstance(x, bytes) else str(x)
@@ -281,7 +289,8 @@ def extract_predictions(img, backbone, decoder, temperature, prototypes, bg_prot
                         class_names, patch_size, input_size, batch_size, patch_iter, device,
                         tomo_name='tomo', roi_mask=None, all_class_names=None, use_seg_head_probs=False,
                         process_group=None, group_rank=0, group_size=1, group_leader_rank=0,
-                        shared_tmp_dir=None, inference_workers=0):
+                        shared_tmp_dir=None, inference_workers=0,
+                        ):
     ordered_names = [name for name in class_names if name in prototypes]
     if not ordered_names:
         raise ValueError('None of class_names have a prototype available.')
@@ -292,7 +301,7 @@ def extract_predictions(img, backbone, decoder, temperature, prototypes, bg_prot
 
     proto_tensors = [F.normalize(prototypes[name].float(), dim=1).to(device) for name in ordered_names]
     bg_proto = F.normalize(bg_prototypes.float(), dim=1).to(device)
-    channel_protos = [bg_proto] + proto_tensors
+    channel_protos = ([bg_proto] if bg_proto is not None else []) + proto_tensors
     n_sim_channels = 1 + len(proto_tensors)
     use_distance_head = bool(getattr(decoder, 'use_distance_head', False))
 
@@ -344,7 +353,7 @@ def extract_predictions(img, backbone, decoder, temperature, prototypes, bg_prot
     if group_rank == 0:
         gpu_text = f'{group_size} GPU(s) for this tomogram' if distributed_tomo else '1 GPU'
         print(f'  Prediction volume: {input_size}  ({n_sim_channels} channel(s), '
-              f'K={channel_protos[0].shape[0]} sub-prototypes each; {gpu_text})')
+              f'K={proto_tensors[0].shape[0]} sub-prototypes each; {gpu_text})')
         if use_seg_head_probs:
             print('  Probabilities: dual-head segmentation softmax '
                   '(unselected foreground classes are merged into background)')
@@ -406,7 +415,6 @@ def extract_predictions(img, backbone, decoder, temperature, prototypes, bg_prot
                 sim_k = torch.einsum('bcdhw,kc->bkdhw', feat, proto_k)
                 per_channel_sims.append(sim_k.max(dim=1).values)
             raw_sim = torch.stack(per_channel_sims, dim=1)
-
             if use_seg_head_probs:
                 full_probs = torch.softmax(dual_seg_logits, dim=1)
                 selected_fg = full_probs[:, seg_head_channels]
@@ -947,22 +955,36 @@ def _main(config_file_path, filename=None):
         cfg = yaml.safe_load(f)
 
     checkpoint_path = cfg['trained_model']
+    checkpoint_stat = os.stat(checkpoint_path)
+    checkpoint_signature = f'{checkpoint_stat.st_mtime_ns}:{checkpoint_stat.st_size}'
+    checkpoint_meta = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+    checkpoint_cfg = checkpoint_meta.get('hyper_parameters', {}).get('config', {})
+    del checkpoint_meta
     backbone = load_backbone_model(checkpoint_path, device)
     decoder = load_decoder_model(checkpoint_path, device=device)
     backbone.eval()
     decoder.eval()
     temperature = load_temperature(checkpoint_path)
 
-    all_class_names = cfg.get('class_names') or load_class_names(checkpoint_path)
+    # The checkpoint defines the prototype-bank row ordering, including
+    # subset fine-tuning. Never use a one-class inference YAML to renumber it.
+    all_class_names = list(checkpoint_cfg.get('all_class_names') or
+                           checkpoint_cfg.get('class_names') or
+                           load_class_names(checkpoint_path))
+    active_names = list(checkpoint_cfg.get('fine_tune_class_names') or all_class_names)
+    if any(name not in all_class_names for name in active_names):
+        raise ValueError('Active fine-tuning classes are not in the checkpoint bank.')
+    if cfg.get('class_names') is not None and list(cfg['class_names']) != all_class_names:
+        raise ValueError('class_names must match the checkpoint bank order; use predict_classes to select a subset.')
     use_distance_head = bool(getattr(decoder, 'use_distance_head', False))
 
     predict_classes = cfg.get('predict_classes')
     if predict_classes is None:
-        class_names = list(all_class_names)
+        class_names = list(active_names)
     else:
-        unknown = [name for name in predict_classes if name not in all_class_names]
+        unknown = [name for name in predict_classes if name not in active_names]
         if unknown:
-            raise ValueError(f'Unknown predict_classes: {unknown}. Available classes: {all_class_names}')
+            raise ValueError(f'Unknown predict_classes: {unknown}. Active classes: {active_names}')
         class_names = [name for name in all_class_names if name in predict_classes]
         if not class_names:
             raise ValueError('predict_classes did not select any classes.')
@@ -976,6 +998,8 @@ def _main(config_file_path, filename=None):
     file_ext = cfg['file_extension']
     batch_size = int(cfg['hyper_parameters']['batch_size'])
     threshold = float(cfg.get('prob_threshold', 0.5))
+    if not 0.0 <= threshold <= 1.0:
+        raise ValueError('prob_threshold must be between 0 and 1.')
     min_voxels = float(cfg.get('min_voxels', 0))
     reuse = bool(cfg.get('reuse_predictions', True))
     k_per_class = int(cfg.get('k_per_class', 1))
@@ -1144,6 +1168,9 @@ def _main(config_file_path, filename=None):
                 h5_create_dataset(hf, 'seg_mask_raw', seg_mask.astype(np.int16))
                 hf.attrs['class_names'] = ordered_names
                 hf.attrs['seg_mode'] = 'dual_head' if use_seg_head_probs else 'prototype'
+                hf.attrs['prob_threshold'] = threshold
+                hf.attrs['trained_model'] = os.path.abspath(checkpoint_path)
+                hf.attrs['checkpoint_signature'] = checkpoint_signature
                 hf.attrs['temperature'] = temperature
                 hf.attrs['similarity_type'] = 'raw_cosine'
                 if distance_maps is not None:
@@ -1288,7 +1315,11 @@ def _main(config_file_path, filename=None):
 
         reusable = None
         if leader and save_h5 != 'none' and reuse:
-            reusable = load_reusable_prediction(h5_out, use_distance_head)
+            reusable = load_reusable_prediction(
+                h5_out, use_distance_head,
+                prob_threshold=threshold,
+                checkpoint_path=os.path.abspath(checkpoint_path),
+                checkpoint_signature=checkpoint_signature)
             if reusable is not None and list(reusable[0]) != list(class_names):
                 reusable = None
 

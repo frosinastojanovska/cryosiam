@@ -3,68 +3,115 @@ import math
 import random
 
 
+
 def patch_train_val_split(images_folder, masks_folder, file_ext='.mrc',
                           ratio=0.1, centers_folder=None):
-    all_patches = [f for f in os.listdir(images_folder)
-                   if f.endswith(file_ext)]
+
+    all_patches = sorted(
+        f for f in os.listdir(images_folder)
+        if f.endswith(file_ext)
+    )
 
     if not all_patches:
         raise ValueError(f'No {file_ext} files found in {images_folder}')
 
+    if not 0 <= ratio < 1:
+        raise ValueError('validation ratio must be in [0, 1)')
+
     def tomo_name(filename):
         return filename[:-len(file_ext)].rsplit('_z', 1)[0]
 
-    # group patches by tomogram
+    # Collect valid patches first.
     tomo_groups = {}
-    for f in all_patches:
-        tomo_groups.setdefault(tomo_name(f), []).append(f)
+    missing = 0
 
-    # split tomograms into train/val
+    for patch in all_patches:
+        entry = {'image': os.path.join(images_folder, patch)}
+
+        if masks_folder is not None:
+            mask_path = os.path.join(masks_folder, patch)
+            if not os.path.exists(mask_path):
+                missing += 1
+                continue
+            entry['mask'] = mask_path
+
+        if centers_folder is not None:
+            center_patch = os.path.splitext(patch)[0] + '.npz'
+            center_path = os.path.join(centers_folder, center_patch)
+            if not os.path.exists(center_path):
+                missing += 1
+                continue
+            entry['center'] = center_path
+
+        tomo_groups.setdefault(tomo_name(patch), []).append(entry)
+
+    if missing:
+        print(f'  WARNING: {missing} patches skipped '
+              '(missing masks or centers)')
+
+    if not tomo_groups:
+        raise ValueError('No valid patches found for training.')
+
     tomo_names = sorted(tomo_groups.keys())
     random.shuffle(tomo_names)
 
-    if ratio == 0:
-        train_tomos, val_tomos = tomo_names, []
+    # ---------------------------------------------------------
+    # Single tomogram: split by patches.
+    # ---------------------------------------------------------
+    if len(tomo_names) == 1:
+
+        patches = tomo_groups[tomo_names[0]].copy()
+        random.shuffle(patches)
+
+        if ratio == 0:
+            train_files = patches
+            val_files = []
+        else:
+            if len(patches) < 2:
+                raise ValueError(
+                    'At least 2 valid patches are required for '
+                    'single-tomogram train/validation splitting.'
+                )
+
+            n_val = max(1, math.ceil(len(patches) * ratio))
+            n_val = min(n_val, len(patches) - 1)
+
+            train_files = patches[:-n_val]
+            val_files = patches[-n_val:]
+
+        print('Single tomogram detected — splitting by patches.')
+
+    # ---------------------------------------------------------
+    # Multiple tomograms: preserve tomogram-level splitting.
+    # ---------------------------------------------------------
     else:
-        n_val = max(1, math.ceil(len(tomo_names) * ratio))
-        train_tomos = tomo_names[:-n_val]
-        val_tomos = tomo_names[-n_val:]
 
-    def build_entries(tomo_list):
-        entries = []
-        missing = 0
+        if ratio == 0:
+            train_tomos, val_tomos = tomo_names, []
+        else:
+            n_val = max(1, math.ceil(len(tomo_names) * ratio))
+            n_val = min(n_val, len(tomo_names) - 1)
 
-        for tomo in tomo_list:
-            for patch in sorted(tomo_groups[tomo]):
-                entry = {'image': os.path.join(images_folder, patch)}
+            train_tomos = tomo_names[:-n_val]
+            val_tomos = tomo_names[-n_val:]
 
-                if masks_folder is not None:
-                    mask_path = os.path.join(masks_folder, patch)
-                    if not os.path.exists(mask_path):
-                        missing += 1
-                        continue
-                    entry['mask'] = mask_path
+        train_files = [
+            entry
+            for tomo in train_tomos
+            for entry in tomo_groups[tomo]
+        ]
 
-                if centers_folder is not None:
-                    center_patch = os.path.splitext(patch)[0] + '.npz'
-                    center_path = os.path.join(centers_folder, center_patch)
-                    if not os.path.exists(center_path):
-                        missing += 1
-                        continue
-                    entry['center'] = center_path
+        val_files = [
+            entry
+            for tomo in val_tomos
+            for entry in tomo_groups[tomo]
+        ]
 
-                entries.append(entry)
+        print(f'Tomograms — train: {len(train_tomos)}, '
+              f'val: {len(val_tomos)}')
 
-        if missing:
-            print(f'  WARNING: {missing} patches skipped '
-                  f'(missing {"mask" if masks_folder else "center"})')
-        return entries
-
-    train_files = build_entries(train_tomos)
-    val_files = build_entries(val_tomos)
-
-    print(f'Tomograms — train: {len(train_tomos)}, val: {len(val_tomos)}')
-    print(f'Patches   — train: {len(train_files)}, val: {len(val_files)}')
+    print(f'Patches   — train: {len(train_files)}, '
+          f'val: {len(val_files)}')
 
     return train_files, val_files
 

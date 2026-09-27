@@ -25,12 +25,11 @@ from cryosiam.apps.dense_simsiam_semantic.train import main as semantic_train
 
 from cryosiam.apps.prototype_refinement.predict import main as prototype_refinement_predict_main
 from cryosiam.apps.prototype_refinement.train import main as prototype_refinement_train_main
+from cryosiam.apps.prototype_refinement.create_patches import main as prototype_refinement_create_patches_main
 from cryosiam.apps.prototype_refinement.save_orientation_references import main as save_orientation_references_main
 from cryosiam.apps.prototype_refinement.determine_initial_orientations import \
     main as determine_initial_orientations_main
-from cryosiam.apps.prototype_refinement.average_aligned_tomograms import main as average_aligned_tomograms_main
-from cryosiam.apps.prototype_refinement.calibrate_thresholds import \
-    main as prototype_refinement_calibrate_thresholds_main
+from cryosiam.apps.prototype_refinement.average_aligned_subtomograms import main as average_aligned_subtomograms_main
 
 from cryosiam.apps.processing.invert_and_scale_intensity import main as invert_and_scale_intensity_main
 from cryosiam.apps.processing.create_sphere_mask_from_coordinates import \
@@ -41,6 +40,9 @@ from cryosiam.apps.processing.create_binary_map_after_sta import main as create_
 from cryosiam.apps.processing.create_multi_class_mask_from_binary_masks import \
     main as create_multi_class_mask_from_binary_masks_main
 from cryosiam.apps.processing.h5_to_mrc import main as h5_to_mrc
+from cryosiam.apps.processing.average_aligned_subtomograms import \
+    main as subtomogram_average_main, \
+    add_cli_arguments as add_subtomogram_average_args
 
 __version__ = "1.0"
 
@@ -180,6 +182,13 @@ def main():
     sp_semantic.add_argument('--config_file', type=str, required=True, help='Path to the .yaml configuration file')
     sp_semantic.set_defaults(func=lambda args: semantic_train(args.config_file))
 
+    # prototype refinement patch creation
+    sp_prototype = subparsers.add_parser("prototype_create_patches",
+                                         help="Create training patches for prototype refinement")
+    sp_prototype.add_argument('--config_file', type=str, required=True,
+                              help='Path to the .yaml configuration file')
+    sp_prototype.set_defaults(func=lambda args: prototype_refinement_create_patches_main(args.config_file))
+
     # prototype refinement training / fine-tuning
     sp_prototype = subparsers.add_parser("prototype_refine",
                                          help="Train or refine a prototype-based particle model")
@@ -203,15 +212,10 @@ def main():
     sp_prototype.add_argument('--config_file', type=str, required=True, help='Path to the .yaml configuration file')
     sp_prototype.set_defaults(func=lambda args: determine_initial_orientations_main(args.config_file))
 
-    sp_prototype = subparsers.add_parser("prototype_average_aligned_tomograms",
+    sp_prototype = subparsers.add_parser("prototype_average_aligned_subtomograms",
                                          help="Average aligned subtomograms")
     sp_prototype.add_argument('--config_file', type=str, required=True, help='Path to the .yaml configuration file')
-    sp_prototype.set_defaults(func=lambda args: average_aligned_tomograms_main(args.config_file))
-
-    sp = subparsers.add_parser("prototype_calibrate_thresholds",
-                               help="Calibrate prototype confidence thresholds from ground-truth centers")
-    sp.add_argument("--config_file", type=str, required=True, help="Path to the threshold-calibration YAML")
-    sp.set_defaults(func=lambda args: prototype_refinement_calibrate_thresholds_main(args.config_file))
+    sp_prototype.set_defaults(func=lambda args: average_aligned_subtomograms_main(args.config_file))
 
     ############# Processing commands #############
     # Invert and scale command
@@ -319,6 +323,12 @@ def main():
     sp_process.add_argument('--output_path', type=str, required=True, help='path to save the output mrc file or '
                                                                            'path to folder to save the output mrc file/s')
     sp_process.set_defaults(func=lambda args: h5_to_mrc(args.input_path, args.output_path))
+
+    # Average subtomograms with alignments from STAR files
+    sp_process = subparsers.add_parser("processing_subtomogram_average",
+                                       help="Average particles from STAR files using denoised tomograms")
+    add_subtomogram_average_args(sp_process)
+    sp_process.set_defaults(func=lambda args: subtomogram_average_main(args.config_file, args))
 
     args = parser.parse_args()
     # Run selected command
