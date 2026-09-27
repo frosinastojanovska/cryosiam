@@ -1013,9 +1013,7 @@ def _main(config_file_path, filename=None):
     mask_dataset_key = cfg.get('mask_dataset_key', 'labels')
     postprocess = cfg.get('postprocess') or {}
     merge_instances = cfg.get('merge_instances')
-    filtering_enabled = any(isinstance(class_cfg, dict) and
-                            any(rule.startswith(('min_', 'max_')) for rule in class_cfg)
-                            for class_cfg in postprocess.values())
+    filtering_enabled = bool(postprocess) or bool(merge_instances)
 
     prediction_folder = cfg['prediction_folder']
     output_folder = cfg.get('output_folder', prediction_folder)
@@ -1150,12 +1148,6 @@ def _main(config_file_path, filename=None):
             prototype_sims[:, ~roi] = -1
             distance_maps = apply_roi_mask(distance_maps, roi)
 
-        if distance_maps is not None:
-            positive_distance = distance_maps > 0
-            prototype_probs[~positive_distance] = 0.0
-            for k in range(len(ordered_names)):
-                seg_mask[(seg_mask == k + 1) & (~positive_distance[k])] = 0
-
         if not reused and save_h5 != 'none':
             with h5py.File(h5_out, 'w') as hf:
                 for k, name in enumerate(ordered_names):
@@ -1210,7 +1202,7 @@ def _main(config_file_path, filename=None):
         # temporary CSV from each tomogram in order to build the joined files
         # across nodes. These hidden staging files are removed at the end.
         raw_join_csv = (
-            raw_csv if save_per_tomogram_centers else
+            raw_csv if save_per_tomogram_centers and not filtering_enabled else
             os.path.join(output_folder, f'.{tomo_name}_all_centers.join.csv')
         )
         post_join_csv = (
@@ -1227,6 +1219,9 @@ def _main(config_file_path, filename=None):
             raw_join_csv, post_join_csv,
             raw_csv, raw_star, post_csv, post_star,
         }
+        for name in ordered_names:
+            stale_paths.add(os.path.join(output_folder, f'{tomo_name}_{name}_centers.star'))
+            stale_paths.add(os.path.join(output_folder, f'{tomo_name}_{name}_centers_postprocessed.star'))
         for path in stale_paths:
             if os.path.exists(path):
                 os.remove(path)
@@ -1249,13 +1244,13 @@ def _main(config_file_path, filename=None):
             output_combined = centers_for_output(combined)
             output_combined.to_csv(raw_join_csv, index=False)
 
-            if save_per_tomogram_centers:
+            if save_per_tomogram_centers and not filtering_enabled:
                 starfile.write(
                     centers_for_star(output_combined, rename_map),
                     raw_star,
                     overwrite=True)
 
-            if save_individual_centers:
+            if save_individual_centers and not filtering_enabled:
                 for name, class_df in combined.groupby(
                         'class', sort=False):
                     output_class = centers_for_output(class_df)
@@ -1285,6 +1280,16 @@ def _main(config_file_path, filename=None):
                             output_postprocessed, rename_map),
                         post_star,
                         overwrite=True)
+
+                if save_individual_centers:
+                    for name, class_df in postprocessed.groupby('class', sort=False):
+                        output_class = centers_for_output(class_df)
+                        starfile.write(
+                            centers_for_star(output_class, rename_map),
+                            os.path.join(
+                                output_folder,
+                                f'{tomo_name}_{name}_centers_postprocessed.star'),
+                            overwrite=True)
 
                 print(
                     f'  {len(postprocessed)} particles '
@@ -1408,7 +1413,7 @@ def _main(config_file_path, filename=None):
             raw_csv = os.path.join(
                 output_folder, f'{tomo_name}_all_centers.csv')
             raw_join_csv = (
-                raw_csv if save_per_tomogram_centers else
+                raw_csv if save_per_tomogram_centers and not filtering_enabled else
                 os.path.join(
                     output_folder,
                     f'.{tomo_name}_all_centers.join.csv')
@@ -1433,46 +1438,55 @@ def _main(config_file_path, filename=None):
                     if len(df):
                         post_frames.append(df)
 
-        out_all = os.path.join(output_folder, 'all_tomograms_centers.csv')
-        out_all_star = os.path.join(output_folder, 'all_tomograms_centers.star')
-        if combined_frames:
-            final = pd.concat(combined_frames, ignore_index=True)
-            final.to_csv(out_all, index=False)
-            starfile.write(centers_for_star(final, rename_map), out_all_star, overwrite=True)
-            print(f'\nDone. {len(final)} particles across {n_files} tomogram(s) -> {out_all}')
+        # Save only one version of the results. With class filtering active,
+        # the unfiltered CSVs were temporary staging files and are not exported.
+        suffix = '_postprocessed' if filtering_enabled else ''
+        final_frames = post_frames if filtering_enabled else combined_frames
+
+        # Remove stale joined files from previous runs, including the opposite
+        # filtering mode and classes that have no particles in this run.
+        for prefix in ['all_tomograms'] + [f'{name}_all_tomograms' for name in class_names]:
+            for old_suffix in ('', '_postprocessed'):
+                for ext in ('csv', 'star'):
+                    old_path = os.path.join(
+                        output_folder, f'{prefix}_centers{old_suffix}.{ext}')
+                    if os.path.exists(old_path):
+                        os.remove(old_path)
+
+        if final_frames:
+            final = pd.concat(final_frames, ignore_index=True)
+            out_all = os.path.join(output_folder, f'all_tomograms_centers{suffix}')
+            final.to_csv(out_all + '.csv', index=False)
+            starfile.write(
+                centers_for_star(final, rename_map), out_all + '.star', overwrite=True)
+            print(f'\nDone. {len(final)} particles across {n_files} tomogram(s) -> {out_all}.csv')
+
+            # Always export one joined CSV/STAR pair per predicted class.
+            # Preserve per-tomogram instance_id values, which match the H5 labels.
+            for name in class_names:
+                class_df = final.loc[final['class'] == name]
+                if class_df.empty:
+                    continue
+                out_class = os.path.join(
+                    output_folder, f'{name}_all_tomograms_centers{suffix}')
+                class_df.to_csv(out_class + '.csv', index=False)
+                starfile.write(
+                    centers_for_star(class_df, rename_map),
+                    out_class + '.star', overwrite=True)
+                print(f'  {name}: {len(class_df)} particles -> {out_class}.csv')
         else:
-            for path in (out_all, out_all_star):
-                if os.path.exists(path):
-                    os.remove(path)
-            print('\nNo particles found in any tomogram.')
+            print('\nNo particles retained in any tomogram.')
 
-        if filtering_enabled:
-            out_post = os.path.join(output_folder, 'all_tomograms_centers_postprocessed.csv')
-            out_post_star = os.path.join(output_folder, 'all_tomograms_centers_postprocessed.star')
-            if post_frames:
-                final_post = pd.concat(post_frames, ignore_index=True)
-                final_post.to_csv(out_post, index=False)
-                starfile.write(centers_for_star(final_post, rename_map), out_post_star, overwrite=True)
-                print(f'Postprocessed: {len(final_post)} particles -> {out_post}')
-            else:
-                for path in (out_post, out_post_star):
-                    if os.path.exists(path):
-                        os.remove(path)
-
-        if not save_per_tomogram_centers:
-            for file in files:
-                tomo_name = os.path.basename(file).split(file_ext)[0]
-                staging_paths = (
-                    os.path.join(
-                        output_folder,
-                        f'.{tomo_name}_all_centers.join.csv'),
-                    os.path.join(
-                        output_folder,
-                        f'.{tomo_name}_all_centers_postprocessed.join.csv'),
-                )
-                for path in staging_paths:
-                    if os.path.exists(path):
-                        os.remove(path)
+        # Hidden per-tomogram staging CSVs are never part of the final outputs.
+        # In particular, remove the unfiltered staging files even when the
+        # user requested visible per-tomogram postprocessed results.
+        for file in files:
+            tomo_name = os.path.basename(file).split(file_ext)[0]
+            for stem in (f'.{tomo_name}_all_centers.join.csv',
+                         f'.{tomo_name}_all_centers_postprocessed.join.csv'):
+                staging_path = os.path.join(output_folder, stem)
+                if os.path.exists(staging_path):
+                    os.remove(staging_path)
 
     if distributed:
         dist.barrier()
