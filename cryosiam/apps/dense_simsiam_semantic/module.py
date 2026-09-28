@@ -44,7 +44,11 @@ class SemanticSegmentationModule(pl.LightningModule):
     def __init__(self, config, backbone_config):
         super().__init__()
         self.config = config
-        self.checkpoint = torch.load(config['pretrained_model'], weights_only=False)
+        self.is_finetuning = bool(config.get('fine_tune_model'))
+        source_path = config.get('fine_tune_model') or config.get('pretrained_model')
+        if not source_path:
+            raise ValueError('Specify fine_tune_model or pretrained_model.')
+        self.checkpoint = torch.load(source_path, weights_only=False)
         self._model_backbone = DenseSimSiam(block_type=backbone_config['parameters']['network']['block_type'],
                                             spatial_dims=backbone_config['parameters']['network']['spatial_dims'],
                                             n_input_channels=backbone_config['parameters']['network'][
@@ -71,12 +75,12 @@ class SemanticSegmentationModule(pl.LightningModule):
                                                 'network'] else 'fpn',
                                             decoder_layers=backbone_config['parameters']['network']['fpn_layers']
                                             if 'fpn_layers' in backbone_config['parameters']['network'] else 2)
-        # self._model_backbone.load_state_dict(self.checkpoint['state_dict'])
-        new_state_dict = collections.OrderedDict()
-        for k, v in self.checkpoint['state_dict'].items():
-            name = k.replace('_model.', '')  # remove `_model.`
-            new_state_dict[name] = v
-        self._model_backbone.load_state_dict(new_state_dict)
+        if not self.is_finetuning:
+            new_state_dict = collections.OrderedDict()
+            for k, v in self.checkpoint['state_dict'].items():
+                name = k.replace('_model.', '')  # remove `_model.`
+                new_state_dict[name] = v
+            self._model_backbone.load_state_dict(new_state_dict)
         self.backbone_config = backbone_config
 
         self._model = SemanticHeads(n_input_channels=config['parameters']['network']['dense_dim'],
@@ -85,6 +89,25 @@ class SemanticSegmentationModule(pl.LightningModule):
                                     filters=config['parameters']['network']['filters'],
                                     kernel_size=config['parameters']['network']['kernel_size'],
                                     padding=config['parameters']['network']['padding'])
+
+        if self.is_finetuning:
+            source_config = self.checkpoint.get('hyper_parameters', {}).get('config', {})
+            source_out_channels = source_config.get('parameters', {}).get('network', {}).get('out_channels')
+            if source_out_channels is not None and int(source_out_channels) != int(
+                    config['parameters']['network']['out_channels']):
+                raise ValueError('fine_tune_model out_channels differs from the current semantic segmentation model.')
+            backbone_state = collections.OrderedDict()
+            model_state = collections.OrderedDict()
+            for k, v in self.checkpoint['state_dict'].items():
+                if k.startswith('_model_backbone.'):
+                    backbone_state[k.replace('_model_backbone.', '', 1)] = v
+                elif k.startswith('_model.'):
+                    model_state[k.replace('_model.', '', 1)] = v
+            if not backbone_state or not model_state:
+                raise ValueError('fine_tune_model is not a semantic segmentation checkpoint.')
+            self._model_backbone.load_state_dict(backbone_state, strict=True)
+            self._model.load_state_dict(model_state, strict=True)
+            print('Loaded semantic segmentation model for fine-tuning.')
 
         self.batch_size = self.config['hyper_parameters']['batch_size']
         self.out_channels = config['parameters']['network']['out_channels']

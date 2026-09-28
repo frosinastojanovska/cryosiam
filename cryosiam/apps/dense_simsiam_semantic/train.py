@@ -28,8 +28,18 @@ def main(config_file_path):
     os.makedirs(cfg['log_dir'], exist_ok=True)
 
     # initialise the LightningModule
-    checkpoint = torch.load(cfg['pretrained_model'], weights_only=False)
-    backbone_config = checkpoint['hyper_parameters']['config']
+    if cfg.get('fine_tune_model') and cfg.get('pretrained_model'):
+        raise ValueError('Use fine_tune_model for semantic fine-tuning, or pretrained_model for a new model; not both.')
+    source_path = cfg.get('fine_tune_model') or cfg.get('pretrained_model')
+    if not source_path:
+        raise ValueError('Specify fine_tune_model or pretrained_model.')
+    checkpoint = torch.load(source_path, weights_only=False)
+    if cfg.get('fine_tune_model'):
+        backbone_config = checkpoint['hyper_parameters'].get('backbone_config')
+        if backbone_config is None:
+            raise ValueError('fine_tune_model does not contain backbone_config.')
+    else:
+        backbone_config = checkpoint['hyper_parameters']['config']
     net = SemanticSegmentationModule(cfg, backbone_config)
 
     # set up checkpoints

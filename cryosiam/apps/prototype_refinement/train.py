@@ -2,7 +2,6 @@ import os
 import yaml
 import torch
 import copy
-import json
 from lightning import Trainer
 from lightning.pytorch.strategies import DDPStrategy
 from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor
@@ -23,7 +22,6 @@ def _load_dense_config(cfg):
 
 
 def _validate_run(cfg, checkpoint_dir, resume_path):
-    """Prevent accidentally resuming/overwriting a different experiment."""
     if cfg.get('fine_tune_model') and cfg.get('pretrained_model'):
         raise ValueError(
             'Use fine_tune_model for prototype-bank fine-tuning, or pretrained_model for a new bank; not both.')
@@ -32,14 +30,6 @@ def _validate_run(cfg, checkpoint_dir, resume_path):
     if cfg.get('resume_checkpoint') and not cfg.get('continue_training', False):
         raise ValueError('Set continue_training: true to resume an existing run.')
     os.makedirs(checkpoint_dir, exist_ok=True)
-    marker = os.path.join(cfg['log_dir'], 'supervised_run_manifest.json')
-    fingerprint = {key: value for key, value in cfg.items()
-                   if key not in ('log_dir', 'continue_training', 'resume_checkpoint',
-                                  'checkpoint_monitor', 'checkpoint_mode')}
-    if os.path.isfile(marker):
-        with open(marker) as stream:
-            if json.load(stream) != fingerprint:
-                raise ValueError('Existing log_dir belongs to a different supervised experiment. Use a new log_dir.')
     if resume_path:
         if not os.path.isfile(resume_path):
             raise FileNotFoundError(resume_path)
@@ -52,12 +42,6 @@ def _validate_run(cfg, checkpoint_dir, resume_path):
             raise ValueError('Resume fine_tune_model differs.')
         if cfg.get('patches_folder') != previous.get('patches_folder'):
             raise ValueError('Resume patches_folder differs.')
-    elif any(os.path.isfile(os.path.join(checkpoint_dir, name)) for name in
-             ('last.ckpt', 'model_best.ckpt', 'last_model.ckpt')):
-        raise ValueError('Existing checkpoint would be overwritten. Use a fresh log_dir or continue_training: true.')
-    if not os.path.isfile(marker):
-        with open(marker, 'w') as stream:
-            json.dump(fingerprint, stream, indent=2, sort_keys=True)
 
 
 def main(config_file_path):
